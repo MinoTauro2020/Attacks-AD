@@ -57,15 +57,55 @@ index=dc_logs sourcetype=WinEventLog:Security EventCode=4768 Pre_Authentication_
 
 ---
 
-## 🔍 ¿Qué buscar además en la detección?
+## 🔎 Queries completas para mas investigacion
 
-| Detección avanzada                                     | Query Splunk sugerida                                                                                                                                    |
-|--------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **1. Solicitudes repetidas desde la misma IP**         | ```splunk<br>index=dc_logs sourcetype=WinEventLog:Security EventCode=4768 Pre_Authentication_Type=0<br>| stats count by Client_Address, Account_Name<br>| where count > 3<br>``` |
-| **2. Solicitudes a cuentas privilegiadas**             | ```splunk<br>index=dc_logs sourcetype=WinEventLog:Security EventCode=4768 Pre_Authentication_Type=0 (Account_Name="Administrator" OR Account_Name="krbtgt" OR Account_Name="*svc*" OR Account_Name="*admin*")<br>| table _time, Account_Name, Client_Address<br>``` |
-| **3. Correlación con otros eventos sospechosos**       | ```splunk<br>index=dc_logs (sourcetype=WinEventLog:Security AND (EventCode=4768 OR EventCode=4625 OR EventCode=4740)) (Client_Address="IP_SOSPECHOSA")<br>| sort _time<br>``` |
-| **4. Cambios de preautenticación en cuentas**          | ```splunk<br>index=dc_logs sourcetype=WinEventLog:Security EventCode=4738<br>| search "Do not require Kerberos preauthentication"=TRUE<br>| table _time, Target_Account_Name, ComputerName, Subject_Account_Name<br>``` |
-| **5. Solicitudes desde redes externas/no confiables**  | ```splunk<br>index=dc_logs sourcetype=WinEventLog:Security EventCode=4768 Pre_Authentication_Type=0<br>| search NOT Client_Address="10.*" NOT Client_Address="192.168.*" NOT Client_Address="172.16.*" NOT Client_Address="127.0.0.1"<br>| table _time, Account_Name, Client_Address<br>``` |
+### 1. Solicitudes repetidas a varias cuentas desde una misma IP
+
+```splunk
+index=dc_logs sourcetype=WinEventLog:Security EventCode=4768 Pre_Authentication_Type=0
+| stats count by Client_Address, Account_Name
+| where count > 3
+```
+
+---
+
+### 2. Solicitudes a cuentas privilegiadas
+
+```splunk
+index=dc_logs sourcetype=WinEventLog:Security EventCode=4768 Pre_Authentication_Type=0
+| search Account_Name="Administrator" OR Account_Name="krbtgt" OR Account_Name="*svc*" OR Account_Name="*admin*"
+| table _time, Account_Name, Client_Address
+```
+
+---
+
+### 3. Correlación con otros eventos sospechosos del mismo origen
+
+```splunk
+index=dc_logs (sourcetype=WinEventLog:Security AND (EventCode=4768 OR EventCode=4625 OR EventCode=4740))
+| search Client_Address="IP_SOSPECHOSA"
+| sort _time
+```
+
+---
+
+### 4. Cambios en cuentas (preautenticación deshabilitada recientemente)
+
+```splunk
+index=dc_logs sourcetype=WinEventLog:Security EventCode=4738
+| search "Do not require Kerberos preauthentication"=TRUE
+| table _time, Target_Account_Name, ComputerName, Subject_Account_Name
+```
+
+---
+
+### 5. Solicitudes desde redes externas o no confiables
+
+```splunk
+index=dc_logs sourcetype=WinEventLog:Security EventCode=4768 Pre_Authentication_Type=0
+| search NOT (Client_Address="10.*" OR Client_Address="192.168.*" OR Client_Address="172.16.*" OR Client_Address="127.0.0.1")
+| table _time, Account_Name, Client_Address
+```
 
 ---
 
