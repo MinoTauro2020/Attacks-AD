@@ -265,8 +265,4 @@
 
 ---
 
-**Notas generales:**
-- Sustituye `<TARGET>`, `<attacker_host>`, `<USER>`, `<PASS>`, `<DOMAIN>`, `<DC>`, `<interface>`, etc. por los valores reales de tu entorno.
-- Todas las técnicas requieren que el atacante pueda escuchar peticiones SMB/HTTP/LDAP en su host.
-- Algunas requieren privilegios elevados.
-- No ejecutes estas acciones fuera de un entorno controlado y autorizado.
+
