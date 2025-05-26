@@ -233,6 +233,28 @@ Propiedades de usuario → Cuenta → Opciones de cuenta →
 
 ---
 
+## Otros datos
+
+➡️ Modo sin credenciales (anónimo):
+•	Puedes usar la herramienta sin usuario ni contraseña (por ejemplo, solo con una lista de usuarios).
+
+•	¿Por qué? Porque la consulta del ticket AS-REP no requiere autenticación si la cuenta está mal configurada.
+
+•	La herramienta envía, para cada usuario de la lista, una petición AS-REQ al controlador de dominio preguntando:
+“¿Me das un ticket para este usuario?”.
+
+•	Si el usuario no requiere preautenticación, el DC responde con el ticket AS-REP.
+
+•	Si la cuenta sí requiere preautenticación, el controlador rechaza la petición (no responde con el ticket).
+
+➡️ Modo autenticado (con usuario/contraseña):
+•	Puedes también lanzar la herramienta con un usuario y una contraseña del dominio.
+
+•	Esto sirve en entornos donde el controlador de dominio no permite consultas anónimas (más restrictivo) o donde necesitas enumerar usuarios reales.
+
+•	La herramienta se conecta autenticándose con el usuario y puede pedir tickets para otros usuarios del dominio.
+
+
 ## 📚 Referencias
 
 - [AS-REP Roasting - HackTricks](https://book.hacktricks.xyz/windows-hardening/active-directory-methodology/as-rep-roasting)
