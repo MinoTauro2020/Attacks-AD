@@ -1,4 +1,4 @@
-# Tabla de Técnicas de Suplantación/Impersonation en Active Directory 
+# Tabla de Técnicas de Suplantación/Impersonation en Active Directory (Ordenada)
 
 | Nº | Técnica                                       | Descripción breve                                                                              | Herramientas principales                  |
 |----|-----------------------------------------------|-----------------------------------------------------------------------------------------------|-------------------------------------------|
