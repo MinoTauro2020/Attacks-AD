@@ -90,3 +90,10 @@ El **firmado LDAP** protege la integridad de las operaciones LDAP (típicamente 
 ---
 
 **¡Con estas configuraciones refuerzas la seguridad de las comunicaciones SMB y LDAP en tu entorno Windows!**
+
+¿Es suficiente para estar 100% protegido?
+No completamente.
+
+Relay sobre otros protocolos: Solo SMB y LDAP quedan protegidos. Otros servicios (HTTP, RDP, etc.) pueden seguir siendo vulnerables si no exigen autenticación segura.
+Relay entre protocolos distintos: Por ejemplo, de SMB a HTTP, de HTTP a LDAP, etc.
+Vulnerabilidades de configuración: Si algún servidor no está configurado para requerir firmado, podría ser vulnerable.
