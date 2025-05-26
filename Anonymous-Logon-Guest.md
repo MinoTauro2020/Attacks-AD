@@ -1,6 +1,6 @@
-## ❌ Bloquear totalmente el acceso de "ANONYMOUS LOGON" y "Guest" 
+## ❌ Bloquear totalmente el acceso de "ANONYMOUS LOGON" y "Guest"
 
-Bloquear el acceso de **ANONYMOUS LOGON** y **Guest** es esencial para prevenir ataques de enumeración, acceso remoto no autenticado y abuso de recursos en Windows. Aquí tienes cómo hacerlo de forma segura y efectiva:
+Bloquear el acceso de **ANONYMOUS LOGON** y **Guest** es esencial para prevenir ataques de enumeración, acceso remoto no autenticado y abuso de recursos en Windows. Aquí tienes cómo hacerlo de forma segura y eficaz:
 
 ---
 
@@ -41,11 +41,11 @@ Bloquear el acceso de **ANONYMOUS LOGON** y **Guest** es esencial para prevenir 
 ### ⬛ 4. Restringir el acceso anónimo a LDAP (solo en controladores de dominio)
 
 🟦 Abre el editor del registro (`regedit`)  
-🟦 Ve a:  
+🟦 Ve a:
 ```
 HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\NTDS\Parameters
 ```
-🟦 Crea o edita el valor DWORD:  
+🟦 Crea o edita el valor DWORD:
 ```
 LDAPServerIntegrity = 2
 ```
