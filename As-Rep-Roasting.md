@@ -4,10 +4,10 @@
 
 ## 📝 ¿Qué es AS-REP Roasting?
 
-| Concepto          | Descripción                                                                                          |
-|-------------------|------------------------------------------------------------------------------------------------------|
-| **Definición**    | Técnica que permite a un atacante solicitar tickets AS-REP Kerberos de cuentas con preautenticación deshabilitada y crackear los hashes offline. |
-| **Requisito**     | La cuenta objetivo debe tener deshabilitada la opción **"Do not require Kerberos preauthentication"**. |
+| Concepto      | Descripción                                                                                                   |
+|---------------|--------------------------------------------------------------------------------------------------------------|
+| **Definición**| Técnica que permite a un atacante solicitar tickets AS-REP Kerberos de cuentas con preautenticación deshabilitada y crackear los hashes offline. |
+| **Requisito** | La cuenta objetivo debe tener deshabilitada la opción **"Do not require Kerberos preauthentication"**.        |
 
 ---
 
@@ -33,7 +33,7 @@ Name       MemberOf  PasswordLastSet             LastLogon                   UAC
 ---------  --------  --------------------------  --------------------------  --------
 missandei            2025-02-26 09:30:35.437503  2025-05-23 07:05:19.141162  0x410200 
 
-$krb5asrep$23$missandei@ESSOS.LOCAL:600c153e69bd4899e402b6d1aad05e4f$1c5e29ec6f2e26b7d3738f19108a0b9b03ffa7ce3480e02f885bafe0de2668d499f23b6b034be320ee03ba64e70f4f3171c5bd59c0afdd1d79e0f64fcc1d13880691ea432a88a2c4f780d5765c000e802d10f1eac3590db4a0306187596f4d4166446e014eda622cb6b7565e305bddb2fefcf4248dc3819d0561d088f1d4ac1f19335f2fe54b5088b45764f6bd6aeec4970bcf7c83f9f985fa257b27e9c77800d25980f23b3f76454e93cf2ae31f7841fa40834b6fb42a11f7a6751aeed4dc5cd5981c5ca05120b419974cfdf400617d2b8cb8e8cea4f9232276f37cd48c845ad83aa12251d73bf05446
+$krb5asrep$23$missandei@ESSOS.LOCAL:600c153e69bd4899e402b6d1aad05e4f$1c5e29ec6f2e26b7d3738f19108a0b9b03ffa7ce3480e02f885bafe0de2668d499f23b6b034be320ee03ba64e70f4f3171c5bd59c0afdd1d79e0f64fcc1d138[...]
 ```
 
 ---
@@ -57,7 +57,7 @@ index=dc_logs sourcetype=WinEventLog:Security EventCode=4768 Pre_Authentication_
 
 ---
 
-## 🔎 Queries completas para mas investigacion
+## 🔎 Queries completas para más investigación
 
 ### 1. Solicitudes repetidas a varias cuentas desde una misma IP
 
@@ -107,7 +107,7 @@ index=dc_logs sourcetype=WinEventLog:Security EventCode=4768 Pre_Authentication_
 | table _time, Account_Name, Client_Address
 ```
 
-### 6. Solicitudes desde redes externas o no confiables mostrando todos los usuarios que han hecho logon antes del 4768
+### 6. Solicitudes externas mostrando todos los usuarios que han hecho logon antes del 4768
 
 ```splunk
 index=dc_logs sourcetype=WinEventLog:Security EventCode=4768 Pre_Authentication_Type=0
@@ -221,7 +221,6 @@ No existe una GPO específica para impedir AS-REQ anónimos, porque el protocolo
 
 ---
 
-
 ## 🧰 ¿Cómo revisar o identificar la preautenticación de una cuenta?
 
 ```powershell
@@ -235,25 +234,26 @@ Propiedades de usuario → Cuenta → Opciones de cuenta →
 
 ## Otros datos
 
-➡️ Modo sin credenciales (anónimo):
-•	Puedes usar la herramienta sin usuario ni contraseña (por ejemplo, solo con una lista de usuarios).
+➡️ Modo sin credenciales (anónimo):  
+• Puedes usar la herramienta sin usuario ni contraseña (por ejemplo, solo con una lista de usuarios).
 
-•	¿Por qué? Porque la consulta del ticket AS-REP no requiere autenticación si la cuenta está mal configurada.
+• ¿Por qué? Porque la consulta del ticket AS-REP no requiere autenticación si la cuenta está mal configurada.
 
-•	La herramienta envía, para cada usuario de la lista, una petición AS-REQ al controlador de dominio preguntando:
+• La herramienta envía, para cada usuario de la lista, una petición AS-REQ al controlador de dominio preguntando:  
 “¿Me das un ticket para este usuario?”.
 
-•	Si el usuario no requiere preautenticación, el DC responde con el ticket AS-REP.
+• Si el usuario no requiere preautenticación, el DC responde con el ticket AS-REP.
 
-•	Si la cuenta sí requiere preautenticación, el controlador rechaza la petición (no responde con el ticket).
+• Si la cuenta sí requiere preautenticación, el controlador rechaza la petición (no responde con el ticket).
 
-➡️ Modo autenticado (con usuario/contraseña):
-•	Puedes también lanzar la herramienta con un usuario y una contraseña del dominio.
+➡️ Modo autenticado (con usuario/contraseña):  
+• Puedes también lanzar la herramienta con un usuario y una contraseña del dominio.
 
-•	Esto sirve en entornos donde el controlador de dominio no permite consultas anónimas (más restrictivo) o donde necesitas enumerar usuarios reales.
+• Esto sirve en entornos donde el controlador de dominio no permite consultas anónimas (más restrictivo) o donde necesitas enumerar usuarios reales.
 
-•	La herramienta se conecta autenticándose con el usuario y puede pedir tickets para otros usuarios del dominio.
+• La herramienta se conecta autenticándose con el usuario y puede pedir tickets para otros usuarios del dominio.
 
+---
 
 ## 📚 Referencias
 
