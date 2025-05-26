@@ -59,7 +59,67 @@ index=dc_logs sourcetype=WinEventLog:Security EventCode=4768 Pre_Authentication_
 
 ## 🔎 Queries completas para más investigación
 
-*(Mantén aquí todas las queries avanzadas de tu original, ya están muy bien y claras. Si quieres puedes añadir títulos más descriptivos a cada una).*
+### 1. Solicitudes repetidas a varias cuentas desde una misma IP
+
+```splunk
+index=dc_logs sourcetype=WinEventLog:Security EventCode=4768 Pre_Authentication_Type=0
+| stats count by Client_Address, Account_Name
+| where count > 3
+```
+
+### 2. Solicitudes a cuentas privilegiadas
+
+```splunk
+index=dc_logs sourcetype=WinEventLog:Security EventCode=4768 Pre_Authentication_Type=0
+| search Account_Name="Administrator" OR Account_Name="krbtgt" OR Account_Name="*svc*" OR Account_Name="*admin*"
+| table _time, Account_Name, Client_Address
+```
+
+### 3. Correlación con otros eventos sospechosos del mismo origen
+
+```splunk
+index=dc_logs (sourcetype=WinEventLog:Security AND (EventCode=4768 OR EventCode=4625 OR EventCode=4740))
+| search Client_Address="IP_SOSPECHOSA"
+| sort _time
+```
+
+### 4. Cambios en cuentas (preautenticación deshabilitada recientemente)
+
+```splunk
+index=dc_logs sourcetype=WinEventLog:Security EventCode=4738
+| search "Do not require Kerberos preauthentication"=TRUE
+| table _time, Target_Account_Name, ComputerName, Subject_Account_Name
+```
+
+### 5. Solicitudes desde redes externas o no confiables
+
+```splunk
+index=dc_logs sourcetype=WinEventLog:Security EventCode=4768 Pre_Authentication_Type=0
+| search NOT (Client_Address="10.*" OR Client_Address="192.168.*" OR Client_Address="172.16.*" OR Client_Address="127.0.0.1")
+| table _time, Account_Name, Client_Address
+```
+
+### 6. Solicitudes externas mostrando todos los usuarios que han hecho logon antes del 4768
+
+```splunk
+index=dc_logs sourcetype=WinEventLog:Security EventCode=4768 Pre_Authentication_Type=0
+| search NOT (Client_Address="10.*" OR Client_Address="192.168.*" OR Client_Address="172.16.*" OR Client_Address="127.0.0.1")
+| rename Account_Name as asrep_user, Client_Address as asrep_ip, _time as asrep_time
+| join asrep_ip [
+    search index=dc_logs sourcetype=WinEventLog:Security EventCode=4624
+    | rename Account_Name as logon_user, IpAddress as logon_ip, _time as logon_time
+    | table logon_user, logon_ip, logon_time
+]
+| where logon_ip=asrep_ip AND logon_time < asrep_time
+| table asrep_time, asrep_user, asrep_ip, logon_user, logon_time
+| sort asrep_time, asrep_ip, logon_time
+```
+
+### 7. Analizar los resultados en función de la presencia o ausencia de logons previos
+
+```splunk
+... | stats count by asrep_time, asrep_ip | where count=0
+```
 
 ---
 
