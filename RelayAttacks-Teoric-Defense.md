@@ -14,8 +14,11 @@
 8. [¿Y si la máquina solo usa NTLMv2?](#8-y-si-la-máquina-solo-usa-ntlmv2)
 9. [Funcionamiento del ataque paso a paso](#9-funcionamiento-del-ataque-paso-a-paso)
 10. [Mitigaciones recomendadas](#10-mitigaciones-recomendadas)
-11. [Resumen visual del ataque](#11-resumen-visual-del-ataque)
-12. [Resumen de mitigaciones](#12-resumen-de-mitigaciones)
+11. [Cómo desactivar NTLMv1 (¡muy importante!)](#11-cómo-desactivar-ntlmv1-muy-importante)
+12. [Resumen visual del ataque](#12-resumen-visual-del-ataque)
+13. [Resumen de mitigaciones](#13-resumen-de-mitigaciones)
+14. [Cómo aplicar las principales medidas de endurecimiento en Windows](#14-cómo-aplicar-las-principales-medidas-de-endurecimiento-en-windows)
+15. [Resumen rápido de rutas](#15-resumen-rápido-de-rutas)
 
 ---
 
@@ -120,6 +123,7 @@
 | Mitigación                                      | ¿Qué previene?                                                     |
 |-------------------------------------------------|--------------------------------------------------------------------|
 | Desactivar LLMNR/NBT-NS/WPAD                    | Evita la suplantación de respuestas en la red.                     |
+| **Desactivar NTLMv1**                           | Elimina el uso de hashes débiles, impide cracking offline trivial. |
 | Forzar solo NTLMv2                              | Elimina hashes débiles, dificulta el crackeo offline.              |
 | Habilitar SMB Signing en servidores y clientes  | Bloquea el relay de autenticación en SMB.                          |
 | Habilitar LDAP Signing y Channel Binding        | Bloquea el relay de autenticación en LDAP.                         |
@@ -130,7 +134,31 @@
 
 ---
 
-## 11. Resumen visual del ataque
+## 11. Cómo desactivar NTLMv1 (¡muy importante!)
+
+**Desactivar NTLMv1 es esencial para evitar que los hashes capturados puedan crackearse rápidamente.**
+
+### 🔒 ¿Cómo hacerlo?
+
+1. Abre `gpedit.msc`.
+2. Ve a:  
+   `Configuración del equipo > Configuración de Windows > Configuración de seguridad > Directivas locales > Opciones de seguridad`
+3. Busca la política:  
+   **Seguridad de red: Nivel de autenticación de LAN Manager**
+4. Selecciona:  
+   **Enviar solo respuesta NTLMv2. Rechazar LM y NTLM**
+5. (Opcional, recomendado)  
+   Busca:  
+   **Seguridad de red: No almacenar el hash de LAN Manager en el próximo cambio de contraseña**  
+   Ponlo en **Habilitado**.
+
+#### 💡 Notas
+- Esto **impide totalmente el uso de NTLMv1 y LM**, tanto para autenticación entrante como saliente.
+- Si tienes dispositivos legacy que solo soportan NTLMv1, deberías migrarlos o aislarlos.
+
+---
+
+## 12. Resumen visual del ataque
 
 ```
 Usuario pide acceso a \\recurso-inexistente
@@ -148,11 +176,12 @@ El atacante captura/relaya el hash
 
 ---
 
-## 12. Resumen de mitigaciones
+## 13. Resumen de mitigaciones
 
 | Mitigación                                 | Impacto principal                                     |
 |--------------------------------------------|-------------------------------------------------------|
 | Desactivar LLMNR/NBT-NS/WPAD               | Ataque Responder deja de funcionar.                   |
+| **Desactivar NTLMv1**                      | Hashes capturados no se pueden crackear fácilmente.   |
 | Solo NTLMv2 + contraseñas robustas         | Hashes capturados no se pueden crackear.              |
 | SMB Signing (habilitado)                   | Relay sobre SMB no es posible.                        |
 | LDAP Signing + Channel Binding             | Relay sobre LDAP no es posible.                       |
@@ -161,7 +190,7 @@ El atacante captura/relaya el hash
 
 ---
 
-## 🛠️ Cómo aplicar las principales medidas de endurecimiento en Windows
+## 14. Cómo aplicar las principales medidas de endurecimiento en Windows
 
 ---
 
@@ -184,15 +213,18 @@ El atacante captura/relaya el hash
 
 ---
 
-### 🔒 Forzar solo NTLMv2
+### 🔒 Desactivar NTLMv1 y forzar solo NTLMv2
 
 1. Abre `gpedit.msc`.
 2. Ve a:  
    `Configuración del equipo > Configuración de Windows > Configuración de seguridad > Directivas locales > Opciones de seguridad`
-3. Busca:  
+3. Busca la política:  
    **Seguridad de red: Nivel de autenticación de LAN Manager**
-4. Ponlo en:  
-   **Enviar solo respuesta NTLMv2**
+4. Selecciona:  
+   **Enviar solo respuesta NTLMv2. Rechazar LM y NTLM**
+5. (Opcional, recomendado):  
+   **Seguridad de red: No almacenar el hash de LAN Manager en el próximo cambio de contraseña**  
+   Ponlo en **Habilitado**.
 
 ---
 
@@ -262,14 +294,14 @@ El atacante captura/relaya el hash
 
 ---
 
-## 📋 Resumen rápido de rutas
+## 15. Resumen rápido de rutas
 
 | Medida                | Herramienta/Ubicación                                                 |
 |-----------------------|-----------------------------------------------------------------------|
 | LLMNR                 | gpedit.msc > Cliente DNS                                              |
 | NBT-NS                | Propiedades del adaptador de red > WINS                               |
 | WPAD                  | Opciones de Internet > Conexiones                                     |
-| NTLMv2                | gpedit.msc > Opciones de seguridad > Nivel de autenticación LAN Manager|
+| NTLMv1/NTLMv2         | gpedit.msc > Opciones de seguridad > Nivel de autenticación LAN Manager|
 | SMB Signing           | gpedit.msc > Opciones de seguridad > Microsoft network client/server  |
 | LDAP Signing          | gpedit.msc > Opciones de seguridad > LDAP server/NTDS (registro)      |
 | Contraseñas fuertes   | gpedit.msc > Directiva de contraseñas                                 |
@@ -278,5 +310,7 @@ El atacante captura/relaya el hash
 | Legacy                | Auditoría manual                                                      |
 
 ---
+
 **Nota:**  
-Lo ideal es combinar todas las mitigaciones para una defensa en profundidad. No dependas solo de una.
+Lo ideal es combinar todas las mitigaciones para una defensa en profundidad.  
+Desactivar NTLMv1 es una de las prioridades más importantes.
