@@ -1,18 +1,19 @@
-## 🔒 Configuración de SMB Signing y LDAP Signing en Windows
+# 🔒 Configuración de SMB Signing y LDAP Signing en Windows
 
-Guía para endurecer la seguridad de tus sistemas Windows mediante la **firma digital (signing)** de SMB y LDAP, tanto por directiva de grupo como por registro.
+> **Resumen:**  
+> Guía práctica para endurecer la seguridad en sistemas Windows mediante la firma digital (signing) de SMB y LDAP, tanto por directiva de grupo como por registro.
 
 ---
 
-### 🟦 1. SMB Signing (Firmado SMB)
+## 🟦 1. SMB Signing (Firmado SMB)
 
-#### ¿Qué es?
-El **firmado SMB** garantiza la integridad de las comunicaciones SMB (compartición de archivos/red) evitando ataques de tipo "man-in-the-middle".
+### ¿Qué es?
+El **firmado SMB** garantiza la integridad de las comunicaciones SMB (compartición de archivos/red) evitando ataques de tipo "man-in-the-middle" y relay NTLM.
 
-#### ¿Dónde se configura?
+### ¿Dónde se configura?
 
 #### 📋 A. Directiva de Grupo (GPO)
-1. Abre `gpedit.msc` o crea una GPO si es dominio.
+1. Abre `gpedit.msc` o crea una GPO si es para dominio.
 2. Navega a:  
    **Configuración del equipo** → **Configuración de Windows** → **Configuración de seguridad** → **Directivas locales** → **Opciones de seguridad**
 3. Configura las siguientes opciones:
@@ -36,12 +37,12 @@ El **firmado SMB** garantiza la integridad de las comunicaciones SMB (compartici
 
 ---
 
-### 🟦 2. LDAP Signing (Firmado LDAP)
+## 🟦 2. LDAP Signing (Firmado LDAP)
 
-#### ¿Qué es?
-El **firmado LDAP** protege la integridad de las operaciones LDAP (típicamente usadas por Active Directory), previniendo ataques de manipulación en el tráfico.
+### ¿Qué es?
+El **firmado LDAP** protege la integridad de las operaciones LDAP (usadas por Active Directory), previniendo ataques de manipulación de tráfico y relay NTLM.
 
-#### ¿Dónde se configura?
+### ¿Dónde se configura?
 
 #### 📋 A. Directiva de Grupo (GPO)
 1. Abre `gpedit.msc` o una GPO aplicada a los controladores de dominio.
@@ -69,10 +70,10 @@ El **firmado LDAP** protege la integridad de las operaciones LDAP (típicamente 
 
 ## 📝 Resumen Rápido
 
-| Servicio     | Directiva de Grupo                                                    | Registro                                                                                 | Valor recomendado         |
-|--------------|-----------------------------------------------------------------------|------------------------------------------------------------------------------------------|--------------------------|
-| **SMB**      | Opciones de seguridad > Firmado digital cliente/servidor              | `LanmanServer\Parameters\RequireSecuritySignature = 1`                                   | Siempre habilitado       |
-| **LDAP**     | Opciones de seguridad > Requisitos de firma del servidor LDAP         | `NTDS\Parameters\ldapserverintegrity = 2`                                                | Requerir firma           |
+| Servicio | Directiva de Grupo                                                  | Registro                                                 | Valor recomendado    |
+|----------|---------------------------------------------------------------------|----------------------------------------------------------|---------------------|
+| **SMB**  | Opciones de seguridad > Firmado digital cliente/servidor            | `LanmanServer\Parameters\RequireSecuritySignature = 1`   | Siempre habilitado  |
+| **LDAP** | Opciones de seguridad > Requisitos de firma del servidor LDAP       | `NTDS\Parameters\ldapserverintegrity = 2`                | Requerir firma      |
 
 ---
 
@@ -89,11 +90,12 @@ El **firmado LDAP** protege la integridad de las operaciones LDAP (típicamente 
 
 ---
 
+## ⚠️ Limitaciones
+
+- **Solo SMB y LDAP** quedan protegidos ante relay con estas medidas. Otros protocolos (HTTP, RDP, etc.) pueden seguir siendo vulnerables si no exigen autenticación segura.
+- Si algún servidor no está configurado para requerir firmado, podría ser vulnerable.
+- El relay entre protocolos distintos (por ejemplo, de SMB a HTTP, de HTTP a LDAP) sigue siendo posible si el destino no exige autenticación fuerte.
+
+---
+
 **¡Con estas configuraciones refuerzas la seguridad de las comunicaciones SMB y LDAP en tu entorno Windows!**
-
-¿Es suficiente para estar 100% protegido?
-No completamente.
-
-Relay sobre otros protocolos: Solo SMB y LDAP quedan protegidos. Otros servicios (HTTP, RDP, etc.) pueden seguir siendo vulnerables si no exigen autenticación segura.
-Relay entre protocolos distintos: Por ejemplo, de SMB a HTTP, de HTTP a LDAP, etc.
-Vulnerabilidades de configuración: Si algún servidor no está configurado para requerir firmado, podría ser vulnerable.
