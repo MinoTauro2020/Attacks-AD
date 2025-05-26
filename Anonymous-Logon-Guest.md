@@ -1,6 +1,6 @@
 ## ❌ Bloquear totalmente el acceso de "ANONYMOUS LOGON" y "Guest" 
 
-Para bloquear toda la autenticación y el acceso de **ANONYMOUS LOGON** y **Guest** en tu máquina (servidor o cliente), aplica las siguientes configuraciones de seguridad:
+Bloquear el acceso de **ANONYMOUS LOGON** y **Guest** es esencial para prevenir ataques de enumeración, acceso remoto no autenticado y abuso de recursos en Windows. Aquí tienes cómo hacerlo de forma segura y efectiva:
 
 ---
 
@@ -11,7 +11,7 @@ Para bloquear toda la autenticación y el acceso de **ANONYMOUS LOGON** y **Gues
 **Directivas locales** → **Asignación de derechos de usuario**  
 🟦 Busca y edita:  
 **Denegar acceso a este equipo desde la red**  
-    ⬛ Añade: `ANONYMOUS LOGON`, `Invitados`
+   ⬛ Añade: `ANONYMOUS LOGON`, `Invitados`
 
 ---
 
@@ -20,7 +20,7 @@ Para bloquear toda la autenticación y el acceso de **ANONYMOUS LOGON** y **Gues
 🟦 En la misma sección (**Asignación de derechos de usuario**):  
 🟦 Busca y edita:  
 **Denegar inicio de sesión localmente**  
-    ⬛ Añade: `ANONYMOUS LOGON`, `Invitados`
+   ⬛ Añade: `ANONYMOUS LOGON`, `Invitados`
 
 ---
 
@@ -57,7 +57,9 @@ LDAPServerIntegrity = 2
 
 🟦 En **Opciones de seguridad**:  
 - ⬛ **Acceso de red: modelo de seguridad y uso compartido para cuentas locales**  
-    Selecciona: **Solo invitado: los usuarios locales se autentican como Invitado**
+    Selecciona:  
+    **Clásico: los usuarios locales se autentican como ellos mismos**  
+*(NO uses la opción "Solo invitado", ya que reduce la seguridad)*
 
 ---
 
@@ -72,6 +74,7 @@ LDAPServerIntegrity = 2
 - ⬛ En inglés:  
   - "Asignación de derechos de usuario" = "User Rights Assignment"
   - "Invitados" = "Guests"
+- ⬛ Si tienes sistemas antiguos (legacy), comprueba compatibilidad antes de aplicar estos cambios, pues podrían dejar de funcionar servicios dependientes del acceso anónimo/guest.
 
 ---
 
