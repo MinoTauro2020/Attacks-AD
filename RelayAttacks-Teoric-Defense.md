@@ -161,5 +161,122 @@ El atacante captura/relaya el hash
 
 ---
 
+## 🛠️ Cómo aplicar las principales medidas de endurecimiento en Windows
+
+---
+
+### 🚫 Desactivar LLMNR, NBT-NS y WPAD
+
+- **LLMNR**:  
+  1. Abre `gpedit.msc`.
+  2. Ve a:  
+     `Configuración del equipo > Plantillas administrativas > Red > Cliente DNS > Desactivar la resolución de nombres mediante LLMNR`  
+     Ponlo en **Habilitado**.
+
+- **NBT-NS**:  
+  1. Panel de Control > Centro de redes y recursos compartidos > Cambiar configuración del adaptador.
+  2. Haz clic derecho en tu adaptador > Propiedades > Protocolo de Internet versión 4 (TCP/IPv4) > Propiedades > Opciones avanzadas > pestaña WINS.
+  3. Marca **Deshabilitar NetBIOS sobre TCP/IP**.
+
+- **WPAD**:  
+  1. Panel de Control > Opciones de Internet > Conexiones > Configuración de LAN.
+  2. Desmarca **Detectar la configuración automáticamente**.
+
+---
+
+### 🔒 Forzar solo NTLMv2
+
+1. Abre `gpedit.msc`.
+2. Ve a:  
+   `Configuración del equipo > Configuración de Windows > Configuración de seguridad > Directivas locales > Opciones de seguridad`
+3. Busca:  
+   **Seguridad de red: Nivel de autenticación de LAN Manager**
+4. Ponlo en:  
+   **Enviar solo respuesta NTLMv2**
+
+---
+
+### 📝 Habilitar SMB Signing (firmado SMB) en servidores y clientes
+
+1. Abre `gpedit.msc`.
+2. Ve a:  
+   `Configuración del equipo > Configuración de Windows > Configuración de seguridad > Directivas locales > Opciones de seguridad`
+3. Configura estas políticas:
+   - **Microsoft network client: Firmar digitalmente las comunicaciones (siempre)**
+   - **Microsoft network server: Firmar digitalmente las comunicaciones (siempre)**
+4. Pon ambas en **Habilitado**.
+
+---
+
+### 📝 Habilitar LDAP Signing y Channel Binding
+
+1. Abre `gpedit.msc` (en un controlador de dominio) o una GPO aplicada a los DC.
+2. Ve a:  
+   `Configuración del equipo > Configuración de Windows > Configuración de seguridad > Directivas locales > Opciones de seguridad`
+3. Configura:  
+   - **Controlador de dominio: requisitos de firma del servidor LDAP**  
+     Ponlo en **Requerir firma**.
+4. **Channel Binding (LDAP)** (en el registro):
+   - Abre `regedit` y ve a:  
+     `HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\NTDS\Parameters`
+   - Crea o edita el valor DWORD:  
+     - `LDAPEnforceChannelBinding` = 2
+
+---
+
+### 🔐 Usar contraseñas largas y robustas
+
+1. Abre `gpedit.msc`.
+2. Ve a:  
+   `Configuración del equipo > Configuración de Windows > Configuración de seguridad > Directivas de cuenta > Directiva de contraseñas`
+3. Configura:
+   - **Longitud mínima de la contraseña**
+   - **Complejidad de la contraseña**
+   - **Vigencia máxima/mínima de la contraseña**
+
+---
+
+### 🕸 Segmentar/red endurecida
+
+- **No es una política de Windows, sino de red.**  
+  - Usa VLANs, firewalls internos, listas de control de acceso (ACLs) para limitar el tráfico entre segmentos.
+  - Adminístralo desde tu infraestructura de red (switches, routers, firewalls).
+
+---
+
+### 🦾 Migrar servicios a Kerberos
+
+- **Por defecto, Active Directory utiliza Kerberos.**  
+  - Asegúrate de que las aplicaciones y servicios usen autenticación integrada de Windows (Kerberos) y no NTLM.
+  - Si es posible, **deshabilita NTLM**:
+    - `gpedit.msc > Configuración del equipo > Configuración de Windows > Configuración de seguridad > Directivas locales > Opciones de seguridad`
+    - **Seguridad de red: Restringir NTLM** → Configura según tus necesidades.
+
+---
+
+### 🧩 Revisar y actualizar dispositivos legacy
+
+- **Revisa manualmente los sistemas antiguos** (Windows XP, 2003, impresoras, NAS, etc.).
+- Asegúrate de que soportan NTLMv2 y firmado SMB; si no, **actualízalos o retíralos**.
+- Evita que estos equipos requieran NTLMv1 o protocolos inseguros.
+
+---
+
+## 📋 Resumen rápido de rutas
+
+| Medida                | Herramienta/Ubicación                                                 |
+|-----------------------|-----------------------------------------------------------------------|
+| LLMNR                 | gpedit.msc > Cliente DNS                                              |
+| NBT-NS                | Propiedades del adaptador de red > WINS                               |
+| WPAD                  | Opciones de Internet > Conexiones                                     |
+| NTLMv2                | gpedit.msc > Opciones de seguridad > Nivel de autenticación LAN Manager|
+| SMB Signing           | gpedit.msc > Opciones de seguridad > Microsoft network client/server  |
+| LDAP Signing          | gpedit.msc > Opciones de seguridad > LDAP server/NTDS (registro)      |
+| Contraseñas fuertes   | gpedit.msc > Directiva de contraseñas                                 |
+| Segmentación de red   | Infraestructura de red (no Windows)                                   |
+| Kerberos/NTLM         | gpedit.msc > Opciones de seguridad > Restringir NTLM                  |
+| Legacy                | Auditoría manual                                                      |
+
+---
 **Nota:**  
 Lo ideal es combinar todas las mitigaciones para una defensa en profundidad. No dependas solo de una.
