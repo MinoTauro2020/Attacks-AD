@@ -1,11 +1,14 @@
 # Funcionamiento de ataques LLMNR/NBT-NS/WPAD/Responder y Mitigaciones
 
+> **Resumen:**  
+> Explicación accesible del funcionamiento de los ataques de relay/captura mediante LLMNR, NBT-NS, WPAD y Responder, y cómo proteger tu entorno AD contra ellos. Incluye pasos, condiciones, riesgos, mitigaciones y rutas rápidas para endurecimiento.
+
 ---
 
 ## Índice
 
 1. [¿Qué son LLMNR, NBT-NS y WPAD?](#1-qué-son-llmnr-nbt-ns-y-wpad)
-2. [¿Por qué existen y para qué se usan?](#2-por-qué-existen-y-para-qué-se-usan)
+2. [¿Por qué existen?](#2-por-qué-existen)
 3. [¿Por qué son vulnerables?](#3-por-qué-son-vulnerables)
 4. [¿Qué obtiene el atacante?](#4-qué-obtiene-el-atacante)
 5. [¿Por qué sigue funcionando?](#5-por-qué-sigue-funcionando)
@@ -14,10 +17,10 @@
 8. [¿Y si la máquina solo usa NTLMv2?](#8-y-si-la-máquina-solo-usa-ntlmv2)
 9. [Funcionamiento del ataque paso a paso](#9-funcionamiento-del-ataque-paso-a-paso)
 10. [Mitigaciones recomendadas](#10-mitigaciones-recomendadas)
-11. [Cómo desactivar NTLMv1 (¡muy importante!)](#11-cómo-desactivar-ntlmv1-muy-importante)
+11. [Desactivar NTLMv1 (muy importante)](#11-desactivar-ntlmv1-muy-importante)
 12. [Resumen visual del ataque](#12-resumen-visual-del-ataque)
 13. [Resumen de mitigaciones](#13-resumen-de-mitigaciones)
-14. [Cómo aplicar las principales medidas de endurecimiento en Windows](#14-cómo-aplicar-las-principales-medidas-de-endurecimiento-en-windows)
+14. [Cómo aplicar las principales medidas en Windows](#14-cómo-aplicar-las-principales-medidas-en-windows)
 15. [Resumen rápido de rutas](#15-resumen-rápido-de-rutas)
 
 ---
@@ -26,135 +29,124 @@
 
 | Protocolo | Descripción                                                                                  |
 |-----------|---------------------------------------------------------------------------------------------|
-| LLMNR     | (Link-Local Multicast Name Resolution) Permite a equipos Windows resolver nombres en red local si el DNS falla. |
-| NBT-NS    | (NetBIOS Name Service) Protocolo antiguo para resolución de nombres NetBIOS.                 |
-| WPAD      | (Web Proxy Auto-Discovery Protocol) Descubre automáticamente servidores proxy en la red.      |
+| LLMNR     | Resolución de nombres local si el DNS falla (Windows, multicast).                           |
+| NBT-NS    | Resolución NetBIOS antigua (Windows).                                                       |
+| WPAD      | Descubrimiento automático de proxy web en red local.                                        |
 
 ---
 
-## 2. ¿Por qué existen y para qué se usan?
+## 2. ¿Por qué existen?
 
-| Motivo             | Explicación                                                                                         |
-|--------------------|----------------------------------------------------------------------------------------------------|
-| Resolución alterna | Cuando DNS no resuelve, Windows recurre a LLMNR/NBT-NS para preguntar a la red por un nombre.      |
-| Descubrimiento     | WPAD permite a los equipos encontrar de forma automática un proxy configurado en la red interna.    |
+| Motivo             | Explicación                                       |
+|--------------------|--------------------------------------------------|
+| Resolución alterna | Alternativa a DNS para encontrar recursos.        |
+| Descubrimiento     | WPAD permite encontrar un proxy automáticamente.  |
 
 ---
 
 ## 3. ¿Por qué son vulnerables?
 
-| Motivo de vulnerabilidad | Detalle                                                                                  |
-|-------------------------|------------------------------------------------------------------------------------------|
-| Falta de autenticidad   | Cualquier equipo de la red puede responder a peticiones LLMNR/NBT-NS/WPAD.              |
-| Suplantación            | El atacante puede responder y hacerse pasar por el recurso buscado por la víctima.       |
-| Autenticación automática| Windows intenta autenticarse automáticamente (NTLM) al recurso falso del atacante.       |
+| Motivo              | Detalle                                                  |
+|---------------------|----------------------------------------------------------|
+| Falta de autenticidad | Cualquiera puede responder a peticiones LLMNR/NBT-NS.  |
+| Suplantación        | El atacante puede hacerse pasar por el recurso buscado.  |
+| Autenticación automática | Windows intenta autenticarse directamente.           |
 
 ---
 
 ## 4. ¿Qué obtiene el atacante?
 
-| Escenario         | Resultado                                                                                           |
-|-------------------|----------------------------------------------------------------------------------------------------|
-| Captura de hash   | El atacante obtiene el hash NTLM de la víctima.                                                     |
-| Relay de hash     | El atacante puede relayar la autenticación a otros servicios (SMB, LDAP, HTTP) con ntlmrelayx.py.  |
-| Contraseña débil  | Si el hash es NTLMv1 o la contraseña es débil, puede crackearla y obtenerla en texto claro.        |
+| Escenario         | Resultado                                       |
+|-------------------|------------------------------------------------|
+| Captura de hash   | El atacante obtiene el hash NTLM de la víctima.|
+| Relay de hash     | Puede relayar autenticación a otros servicios. |
+| Contraseña débil  | Puede crackear y obtener la contraseña.        |
 
 ---
 
 ## 5. ¿Por qué sigue funcionando?
 
-| Motivo                             | Explicación                                                                                      |
-|------------------------------------|-------------------------------------------------------------------------------------------------|
-| Protocolos activos por defecto     | LLMNR, NBT-NS y WPAD suelen estar habilitados en sistemas Windows modernos.                      |
-| NTLM sigue siendo común            | NTLM se usa mucho por compatibilidad, incluso cuando Kerberos está disponible.                   |
-| Falta de concienciación            | Muchos usuarios no saben que estos mecanismos están activos o los riesgos que suponen.           |
-| Compatibilidad con sistemas antiguos| NTLMv1 sigue habilitado en muchas redes por compatibilidad con dispositivos legacy.              |
+| Motivo                             | Explicación                                          |
+|------------------------------------|-----------------------------------------------------|
+| Protocolos activos por defecto     | LLMNR, NBT-NS y WPAD habilitados en Windows modernos.|
+| NTLM sigue siendo común            | Mucho software legacy depende de NTLM.              |
+| Falta de concienciación            | Muchos desconocen el riesgo.                        |
+| Compatibilidad con sistemas antiguos| NTLMv1 sigue activo por dispositivos legacy.         |
 
 ---
 
 ## 6. Condiciones para ser vulnerable
 
-| Condición                                    | Riesgo que implica                                                                      |
-|----------------------------------------------|----------------------------------------------------------------------------------------|
-| LLMNR, NBT-NS o WPAD habilitados             | Permiten que un atacante suplante recursos de red y capture autenticaciones.           |
-| NTLMv1 habilitado                            | Los hashes capturados se pueden crackear fácilmente.                                   |
-| NTLMv2 pero contraseñas débiles              | Hashes difíciles de crackear, pero posible si la contraseña es débil.                  |
-| Servicios SMB/LDAP/HTTP sin signing          | Permiten relay de autenticación NTLM (v1 o v2).                                        |
-| SMB signing/LDAP signing deshabilitado       | El relay es posible si la firma digital no está activada en estos servicios.           |
-| Usuarios accediendo a nombres erróneos       | Más oportunidades para que el ataque funcione.                                         |
+| Condición                       | Riesgo que implica                                      |
+|---------------------------------|---------------------------------------------------------|
+| LLMNR/NBT-NS/WPAD habilitados   | Suplantación y captura de autenticaciones.              |
+| NTLMv1 habilitado               | Hashes fáciles de crackear.                             |
+| NTLMv2 + contraseñas débiles    | Crackeo posible si la contraseña es débil.              |
+| SMB/LDAP/HTTP sin signing       | Permiten relay de autenticación NTLM.                   |
+| SMB/LDAP signing deshabilitado  | Relay posible si no se exige firma digital.             |
+| Usuarios accediendo a nombres erróneos | Aumenta la superficie de ataque.                     |
 
 ---
 
 ## 7. Por qué NTLMv1 es especialmente peligroso
 
-| Motivo         | Detalle                                                                                      |
-|----------------|---------------------------------------------------------------------------------------------|
-| Algoritmo débil| Hashes NTLMv1 son vulnerables a ataques por diccionario y fuerza bruta.                     |
-| Crackeo rápido | Herramientas como Hashcat o John pueden crackear NTLMv1 en minutos/hora si la contraseña no es robusta. |
-| NTLMv2 es mejor| NTLMv2 utiliza salting y desafíos más robustos, dificultando el crackeo offline.            |
+- Algoritmo débil, fácil de crackear.
+- Herramientas como Hashcat/John lo rompen rápido si la contraseña no es robusta.
+- NTLMv2 es mucho más seguro (usa "salting" y desafíos fuertes).
 
 ---
 
 ## 8. ¿Y si la máquina solo usa NTLMv2?
 
-| Escenario                 | ¿Qué pasa?                                                                                 |
-|---------------------------|-------------------------------------------------------------------------------------------|
-| Captura de hash NTLMv2    | Se puede capturar con Responder, pero crackearlo es muy difícil si la contraseña es buena.|
-| Relay de autenticación    | El relay sigue siendo posible si los servicios no tienen mitigaciones (SMB/LDAP signing). |
-| Contraseña fuerte         | Aunque el hash se capture, no podrá crackearse prácticamente nunca.                       |
+| Escenario                 | Resultado                                               |
+|---------------------------|--------------------------------------------------------|
+| Captura de hash NTLMv2    | Difícil de crackear si la contraseña es fuerte.        |
+| Relay de autenticación    | Sigue siendo posible si no hay mitigación (signing).   |
+| Contraseña fuerte         | Hash inútil para cracking.                             |
 
 ---
 
 ## 9. Funcionamiento del ataque paso a paso
 
-| Paso | Descripción                                                                                           |
-|------|------------------------------------------------------------------------------------------------------|
-| 1    | Usuario accede a un recurso no existente (por ejemplo, `\\servidor-que-no-existe`).                  |
-| 2    | DNS no puede resolver el nombre.                                                                     |
-| 3    | Windows envía petición LLMNR/NBT-NS/WPAD a la red preguntando "¿Quién es servidor-que-no-existe?".   |
-| 4    | El atacante responde como si fuera el servidor buscado.                                              |
-| 5    | Windows intenta autenticarse (NTLM) automáticamente contra el atacante.                              |
-| 6    | El atacante captura el hash NTLM o lo relayea a otro servicio.                                       |
+1. Usuario accede a `\\recurso-que-no-existe`.
+2. DNS no resuelve el nombre.
+3. Windows pregunta vía LLMNR/NBT-NS/WPAD.
+4. El atacante responde como si fuera el recurso.
+5. Windows intenta autenticarse (NTLM) automáticamente.
+6. El atacante captura el hash o lo relayea.
 
 ---
 
 ## 10. Mitigaciones recomendadas
 
-| Mitigación                                      | ¿Qué previene?                                                     |
-|-------------------------------------------------|--------------------------------------------------------------------|
-| Desactivar LLMNR/NBT-NS/WPAD                    | Evita la suplantación de respuestas en la red.                     |
-| **Desactivar NTLMv1**                           | Elimina el uso de hashes débiles, impide cracking offline trivial. |
-| Forzar solo NTLMv2                              | Elimina hashes débiles, dificulta el crackeo offline.              |
-| Habilitar SMB Signing en servidores y clientes  | Bloquea el relay de autenticación en SMB.                          |
-| Habilitar LDAP Signing y Channel Binding        | Bloquea el relay de autenticación en LDAP.                         |
-| Usar contraseñas largas y robustas              | Dificulta el crackeo de hashes NTLMv2 capturados.                  |
-| Segmentar/red endurecida                        | Limita el alcance del atacante en la red.                          |
-| Migrar servicios a Kerberos                     | Elimina por completo el uso de NTLM para autenticación.            |
-| Revisar y actualizar dispositivos legacy        | Evitar que requieran NTLMv1 por compatibilidad.                    |
+| Mitigación                            | ¿Qué previene?                              |
+|----------------------------------------|---------------------------------------------|
+| Desactivar LLMNR/NBT-NS/WPAD           | Evita la suplantación.                      |
+| Desactivar NTLMv1                      | Elimina hashes débiles y cracking trivial.  |
+| Forzar solo NTLMv2                     | Dificulta el cracking offline.              |
+| Habilitar SMB Signing                  | Bloquea el relay NTLM en SMB.               |
+| Habilitar LDAP Signing/Channel Binding | Bloquea relay NTLM en LDAP.                 |
+| Contraseñas robustas                   | Dificulta cracking NTLMv2.                  |
+| Segmentar/red endurecida               | Limita el alcance del atacante.             |
+| Migrar servicios a Kerberos            | Elimina el uso de NTLM.                     |
+| Revisar dispositivos legacy            | Evita que requieran NTLMv1.                 |
 
 ---
 
-## 11. Cómo desactivar NTLMv1 (¡muy importante!)
+## 11. Desactivar NTLMv1 (muy importante)
 
-**Desactivar NTLMv1 es esencial para evitar que los hashes capturados puedan crackearse rápidamente.**
-
-### 🔒 ¿Cómo hacerlo?
+### Pasos
 
 1. Abre `gpedit.msc`.
 2. Ve a:  
    `Configuración del equipo > Configuración de Windows > Configuración de seguridad > Directivas locales > Opciones de seguridad`
-3. Busca la política:  
-   **Seguridad de red: Nivel de autenticación de LAN Manager**
-4. Selecciona:  
-   **Enviar solo respuesta NTLMv2. Rechazar LM y NTLM**
-5. (Opcional, recomendado)  
-   Busca:  
-   **Seguridad de red: No almacenar el hash de LAN Manager en el próximo cambio de contraseña**  
-   Ponlo en **Habilitado**.
+3. Busca: **Seguridad de red: Nivel de autenticación de LAN Manager**
+4. Selecciona: **Enviar solo respuesta NTLMv2. Rechazar LM y NTLM**
+5. (Opcional) **No almacenar el hash de LAN Manager en el próximo cambio de contraseña** → Habilitado.
 
-#### 💡 Notas
-- Esto **impide totalmente el uso de NTLMv1 y LM**, tanto para autenticación entrante como saliente.
-- Si tienes dispositivos legacy que solo soportan NTLMv1, deberías migrarlos o aislarlos.
+**Notas:**  
+- Así bloqueas NTLMv1 y LM completamente.
+- Si tienes dispositivos legacy, migra o aísla.
 
 ---
 
@@ -178,139 +170,75 @@ El atacante captura/relaya el hash
 
 ## 13. Resumen de mitigaciones
 
-| Mitigación                                 | Impacto principal                                     |
-|--------------------------------------------|-------------------------------------------------------|
-| Desactivar LLMNR/NBT-NS/WPAD               | Ataque Responder deja de funcionar.                   |
-| **Desactivar NTLMv1**                      | Hashes capturados no se pueden crackear fácilmente.   |
-| Solo NTLMv2 + contraseñas robustas         | Hashes capturados no se pueden crackear.              |
-| SMB Signing (habilitado)                   | Relay sobre SMB no es posible.                        |
-| LDAP Signing + Channel Binding             | Relay sobre LDAP no es posible.                       |
-| Segmentación de red                        | Difícil que el atacante llegue a las víctimas.        |
-| Kerberos everywhere                        | NTLM deja de usarse, Responder deja de ser efectivo.  |
+| Medida                           | Impacto principal                        |
+|-----------------------------------|------------------------------------------|
+| Desactivar LLMNR/NBT-NS/WPAD      | Responder deja de funcionar.             |
+| Desactivar NTLMv1                 | Hashes capturados no se crackean fácil.  |
+| Solo NTLMv2 + contraseñas fuertes | Hashes capturados no se crackean.        |
+| SMB/LDAP Signing                  | Relay sobre SMB/LDAP no es posible.      |
+| Segmentación de red               | Difícil que el atacante llegue a víctimas|
+| Kerberos everywhere               | NTLM deja de usarse, ataque inservible.  |
 
 ---
 
-## 14. Cómo aplicar las principales medidas de endurecimiento en Windows
-
----
+## 14. Cómo aplicar las principales medidas en Windows
 
 ### 🚫 Desactivar LLMNR, NBT-NS y WPAD
 
 - **LLMNR**:  
-  1. Abre `gpedit.msc`.
-  2. Ve a:  
-     `Configuración del equipo > Plantillas administrativas > Red > Cliente DNS > Desactivar la resolución de nombres mediante LLMNR`  
-     Ponlo en **Habilitado**.
-
+  - `gpedit.msc` > Red > Cliente DNS > Desactivar la resolución de nombres mediante LLMNR → Habilitado
 - **NBT-NS**:  
-  1. Panel de Control > Centro de redes y recursos compartidos > Cambiar configuración del adaptador.
-  2. Haz clic derecho en tu adaptador > Propiedades > Protocolo de Internet versión 4 (TCP/IPv4) > Propiedades > Opciones avanzadas > pestaña WINS.
-  3. Marca **Deshabilitar NetBIOS sobre TCP/IP**.
-
+  - Panel de Control > Centro de redes > Cambiar configuración del adaptador > WINS > Deshabilitar NetBIOS sobre TCP/IP
 - **WPAD**:  
-  1. Panel de Control > Opciones de Internet > Conexiones > Configuración de LAN.
-  2. Desmarca **Detectar la configuración automáticamente**.
+  - Opciones de Internet > Conexiones > Configuración de LAN > Desmarcar "Detectar configuración automáticamente"
 
----
+### 🔒 Forzar solo NTLMv2
 
-### 🔒 Desactivar NTLMv1 y forzar solo NTLMv2
+- `gpedit.msc` > Opciones de seguridad > Nivel de autenticación LAN Manager → Solo NTLMv2
 
-1. Abre `gpedit.msc`.
-2. Ve a:  
-   `Configuración del equipo > Configuración de Windows > Configuración de seguridad > Directivas locales > Opciones de seguridad`
-3. Busca la política:  
-   **Seguridad de red: Nivel de autenticación de LAN Manager**
-4. Selecciona:  
-   **Enviar solo respuesta NTLMv2. Rechazar LM y NTLM**
-5. (Opcional, recomendado):  
-   **Seguridad de red: No almacenar el hash de LAN Manager en el próximo cambio de contraseña**  
-   Ponlo en **Habilitado**.
+### 📝 Habilitar SMB/LDAP Signing
 
----
+- **SMB:**  
+  - `gpedit.msc` > Opciones de seguridad > Microsoft network client/server: Firmar digitalmente las comunicaciones (siempre) → Habilitado
+- **LDAP:**  
+  - `gpedit.msc` > Opciones de seguridad > Requisitos de firma del servidor LDAP → Requerir firma
+  - Registro: `LDAPEnforceChannelBinding`=2
 
-### 📝 Habilitar SMB Signing (firmado SMB) en servidores y clientes
+### 🔑 Contraseñas robustas
 
-1. Abre `gpedit.msc`.
-2. Ve a:  
-   `Configuración del equipo > Configuración de Windows > Configuración de seguridad > Directivas locales > Opciones de seguridad`
-3. Configura estas políticas:
-   - **Microsoft network client: Firmar digitalmente las comunicaciones (siempre)**
-   - **Microsoft network server: Firmar digitalmente las comunicaciones (siempre)**
-4. Pon ambas en **Habilitado**.
+- `gpedit.msc` > Directiva de contraseñas > Longitud mínima, complejidad, vigencia
 
----
+### 🗝️ Segmentación/red endurecida
 
-### 📝 Habilitar LDAP Signing y Channel Binding
+- VLANs, firewalls, ACLs, etc.
 
-1. Abre `gpedit.msc` (en un controlador de dominio) o una GPO aplicada a los DC.
-2. Ve a:  
-   `Configuración del equipo > Configuración de Windows > Configuración de seguridad > Directivas locales > Opciones de seguridad`
-3. Configura:  
-   - **Controlador de dominio: requisitos de firma del servidor LDAP**  
-     Ponlo en **Requerir firma**.
-4. **Channel Binding (LDAP)** (en el registro):
-   - Abre `regedit` y ve a:  
-     `HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\NTDS\Parameters`
-   - Crea o edita el valor DWORD:  
-     - `LDAPEnforceChannelBinding` = 2
+### 🧢 Migrar servicios a Kerberos
 
----
+- `gpedit.msc` > Opciones de seguridad > Restringir NTLM
 
-### 🔐 Usar contraseñas largas y robustas
+### 🧾 Revisar y actualizar legacy
 
-1. Abre `gpedit.msc`.
-2. Ve a:  
-   `Configuración del equipo > Configuración de Windows > Configuración de seguridad > Directivas de cuenta > Directiva de contraseñas`
-3. Configura:
-   - **Longitud mínima de la contraseña**
-   - **Complejidad de la contraseña**
-   - **Vigencia máxima/mínima de la contraseña**
-
----
-
-### 🕸 Segmentar/red endurecida
-
-- **No es una política de Windows, sino de red.**  
-  - Usa VLANs, firewalls internos, listas de control de acceso (ACLs) para limitar el tráfico entre segmentos.
-  - Adminístralo desde tu infraestructura de red (switches, routers, firewalls).
-
----
-
-### 🦾 Migrar servicios a Kerberos
-
-- **Por defecto, Active Directory utiliza Kerberos.**  
-  - Asegúrate de que las aplicaciones y servicios usen autenticación integrada de Windows (Kerberos) y no NTLM.
-  - Si es posible, **deshabilita NTLM**:
-    - `gpedit.msc > Configuración del equipo > Configuración de Windows > Configuración de seguridad > Directivas locales > Opciones de seguridad`
-    - **Seguridad de red: Restringir NTLM** → Configura según tus necesidades.
-
----
-
-### 🧩 Revisar y actualizar dispositivos legacy
-
-- **Revisa manualmente los sistemas antiguos** (Windows XP, 2003, impresoras, NAS, etc.).
-- Asegúrate de que soportan NTLMv2 y firmado SMB; si no, **actualízalos o retíralos**.
-- Evita que estos equipos requieran NTLMv1 o protocolos inseguros.
+- Asegura soporte NTLMv2 y firmado SMB. Si no, retíralos.
 
 ---
 
 ## 15. Resumen rápido de rutas
 
-| Medida                | Herramienta/Ubicación                                                 |
-|-----------------------|-----------------------------------------------------------------------|
-| LLMNR                 | gpedit.msc > Cliente DNS                                              |
-| NBT-NS                | Propiedades del adaptador de red > WINS                               |
-| WPAD                  | Opciones de Internet > Conexiones                                     |
-| NTLMv1/NTLMv2         | gpedit.msc > Opciones de seguridad > Nivel de autenticación LAN Manager|
-| SMB Signing           | gpedit.msc > Opciones de seguridad > Microsoft network client/server  |
-| LDAP Signing          | gpedit.msc > Opciones de seguridad > LDAP server/NTDS (registro)      |
-| Contraseñas fuertes   | gpedit.msc > Directiva de contraseñas                                 |
-| Segmentación de red   | Infraestructura de red (no Windows)                                   |
-| Kerberos/NTLM         | gpedit.msc > Opciones de seguridad > Restringir NTLM                  |
-| Legacy                | Auditoría manual                                                      |
+| Medida                | Ubicación/Herramienta                                   |
+|-----------------------|--------------------------------------------------------|
+| LLMNR                 | gpedit.msc > Cliente DNS                               |
+| NBT-NS                | Adaptador de red > WINS                                |
+| WPAD                  | Opciones de Internet > Conexiones                      |
+| NTLMv1/NTLMv2         | gpedit.msc > Opciones de seguridad > Autenticación LAN |
+| SMB Signing           | gpedit.msc > Opciones de seguridad > network client    |
+| LDAP Signing          | gpedit.msc > Opciones de seguridad > LDAP/NTDS         |
+| Contraseñas fuertes   | gpedit.msc > Directiva de contraseñas                  |
+| Segmentación de red   | Infraestructura de red                                 |
+| Kerberos/NTLM         | gpedit.msc > Opciones de seguridad > Restringir NTLM   |
+| Legacy                | Auditoría manual                                       |
 
 ---
 
-**Nota:**  
-Lo ideal es combinar todas las mitigaciones para una defensa en profundidad.  
+**Recomendación:**  
+Combina todas las mitigaciones para defensa en profundidad.  
 Desactivar NTLMv1 es una de las prioridades más importantes.
