@@ -59,6 +59,17 @@ index=dc_logs sourcetype=WinEventLog:Security EventCode=4769
 
 ## 🔎 Queries completas para más investigación
 
+### 0 .Prioridad de cuentas
+
+```splunk
+
+index=dc_logs sourcetype=WinEventLog:Security EventCode=4769 Ticket_Encryption_Type="0x17"
+| where match(Service_Name, "(?i)(admin|svc|sql|oracle|backup|db|service|root|sap)")
+| stats count by Service_Name, Account_Name, Client_Address
+| where count > 3
+| sort -count
+```
+
 ### 1. Solicitudes masivas de TGS desde una misma IP
 
 ```splunk
@@ -116,6 +127,17 @@ index=dc_logs sourcetype=WinEventLog:Security EventCode=4769
 ]
 | where isnull(access_time)
 | table _time, Account_Name, Service_Name, Client_Address
+```
+
+### 7. Quien pide el TGS
+
+```splunk
+index="*" 4769
+| where Ticket_Encryption_Type="0x17" OR Ticket_Encryption_Type="23"
+| search Service_Name="*admin*" OR Service_Name="*svc*" OR Service_Name="MSSQLSvc*" OR Service_Name="HTTP/*" OR Service_Name="*sql*" OR Service_Name="*backup*"
+| stats count by Account_Name, Service_Name, Client_Address
+| where count > 3
+| sort -count
 ```
 
 ---
