@@ -88,8 +88,6 @@ Atacante → (función RPC vulnerable) → Víctima → (autenticación NTLM for
 ```
 # ¿Por qué el relay NTLM permite escalar privilegios?
 
-> **Respuesta hiper-experta desde Red Team, Purple Team, Threat Hunter, Blue Team y Threat Intelligence**
-
 ---
 
 ## 1. ¿Qué es la escalada de privilegios vía relay NTLM?
