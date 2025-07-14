@@ -9,6 +9,7 @@ Repositorio de referencia y ayuda rápida sobre ataques, técnicas y hardening e
 - **Impersonation-Attacks.md**: Índice práctico de técnicas de suplantación en Active Directory.
 - **Impersonation-Explain.md**: Tabla detallada de explicación, falsos positivos y verificación para cada técnica.
 - **Impersonation-Resume.md**: Resumen visual rápido de técnicas y herramientas principales.
+- **leetelo.md**: Técnicas de ofuscación y evasión mediante nomenclatura leetspeak en AD.
 
 ## ¿Para qué sirve este repo?
 
