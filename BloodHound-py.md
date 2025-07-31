@@ -27,20 +27,20 @@
 
 ```bash
 # Recopilación básica con credenciales
-bloodhound-python -d ejemplo.local -u usuario -p 'contraseña' -gc controlador.ejemplo.local -c all
+bloodhound-python -d essos.local -u usuario -p 'contraseña' -gc controlador.essos.local -c all
 
 # Usando hash NTLM en lugar de contraseña
-bloodhound-python -d ejemplo.local -u usuario --hashes aad3b435b51404eeaad3b435b51404ee:5e8a0123456789abcdef0123456789ab -gc controlador.ejemplo.local -c all
+bloodhound-python -d essos.local -u usuario --hashes aad3b435b51404eeaad3b435b51404ee:5e8a0123456789abcdef0123456789ab -gc controlador.essos.local -c all
 
 # Enumeración específica (solo usuarios y grupos)
-bloodhound-python -d ejemplo.local -u usuario -p 'contraseña' -gc controlador.ejemplo.local -c Users,Groups
+bloodhound-python -d essos.local -u usuario -p 'contraseña' -gc controlador.essos.local -c Users,Groups
 
 # Con autenticación Kerberos (ccache)
 export KRB5CCNAME=/tmp/usuario.ccache
-bloodhound-python -d ejemplo.local -k -gc controlador.ejemplo.local -c all
+bloodhound-python -d essos.local -k -gc controlador.essos.local -c all
 
 # Salida a archivo específico
-bloodhound-python -d ejemplo.local -u usuario -p 'contraseña' -gc controlador.ejemplo.local -c all --zip
+bloodhound-python -d essos.local -u usuario -p 'contraseña' -gc controlador.essos.local -c all --zip
 ```
 
 ---

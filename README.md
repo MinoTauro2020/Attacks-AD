@@ -1,4 +1,4 @@
-# Attacks-AD# Attacks-AD
+# Attacks-AD
 
 Repositorio de referencia y ayuda rápida sobre ataques, técnicas y hardening en Active Directory, especialmente centrado en suplantación de identidad (impersonation), ataques de Kerberos y abuso de servicios.
 
@@ -18,5 +18,5 @@ Repositorio de referencia y ayuda rápida sobre ataques, técnicas y hardening e
 
 ---
 
-Actualizado a: Mayo 2025  
+Actualizado a: Julio 2024  
 Autor: [MinoTauro2020](https://github.com/MinoTauro2020)
