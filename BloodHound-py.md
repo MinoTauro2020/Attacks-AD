@@ -88,6 +88,144 @@ index=dc_logs (EventCode=4768 OR EventCode=4769 OR EventCode=4662 OR EventCode=5
 
 ---
 
+## 🛡️ Detección con Windows Defender for Endpoint
+
+### Reglas de detección personalizadas
+
+```kql
+// BloodHound-py - Detección de enumeración LDAP masiva
+DeviceNetworkEvents
+| where RemotePort == 389 or RemotePort == 636
+| where ActionType == "ConnectionSuccess"
+| summarize ConnectionCount = count() by DeviceId, RemoteIP, bin(Timestamp, 5m)
+| where ConnectionCount > 50
+| order by ConnectionCount desc
+```
+
+```kql
+// Detección de herramientas BloodHound
+DeviceProcessEvents
+| where ProcessCommandLine has_any ("bloodhound-python", "bloodhound.py", "sharphound", "azurehound")
+| project Timestamp, DeviceName, AccountName, ProcessCommandLine, InitiatingProcessFileName
+| order by Timestamp desc
+```
+
+```kql
+// Detección de consultas LDAP anómalas
+DeviceEvents
+| where ActionType == "LdapQuery"
+| where AdditionalFields has_any ("member", "memberof", "objectclass", "distinguishedname")
+| summarize QueryCount = count() by DeviceId, AccountName, bin(Timestamp, 5m)
+| where QueryCount > 100
+| order by QueryCount desc
+```
+
+### Alertas recomendadas
+
+| Regla | Descripción | Severidad |
+|-------|-------------|-----------|
+| **LDAP Enumeration Spike** | Más de 50 consultas LDAP en 5 minutos | Media |
+| **BloodHound Tools** | Detección de herramientas de enumeración conocidas | Alta |
+| **Mass LDAP Queries** | Consultas LDAP masivas para enumeración de AD | Media |
+
+---
+
+## 🦅 Detección con CrowdStrike Falcon
+
+### Hunting queries (Event Search)
+
+```sql
+-- Detección de BloodHound basado en consultas LDAP
+event_platform=Win event_simpleName=LdapSearch
+| bin _time span=5m
+| stats count as query_count, values(SearchFilter) as filters by ComputerName, UserName, _time
+| where query_count > 100
+| sort - query_count
+```
+
+```sql
+-- Detección de herramientas BloodHound
+event_platform=Win event_simpleName=ProcessRollup2 
+| search (FileName=*bloodhound* OR CommandLine=*bloodhound-python* OR CommandLine=*sharphound*)
+| table _time, ComputerName, UserName, FileName, CommandLine, SHA256HashData
+| sort - _time
+```
+
+```sql
+-- Detección de conexiones LDAP masivas
+event_platform=Win event_simpleName=NetworkConnectIP4
+| search RemotePort IN (389, 636, 3268, 3269)
+| bin _time span=5m
+| stats count as connection_count by ComputerName, RemoteAddressIP4, RemotePort, _time
+| where connection_count > 20
+| sort - connection_count
+```
+
+### Custom IOAs (Indicators of Attack)
+
+```sql
+-- IOA para detectar enumeración de AD
+event_platform=Win event_simpleName=DirectoryServiceAccess
+| search ObjectDN=*
+| bin _time span=2m
+| stats dc(ObjectDN) as unique_objects by ComputerName, UserName, _time
+| where unique_objects > 500
+```
+
+---
+
+## 🔍 Queries KQL para Microsoft Sentinel
+
+### Detección de BloodHound
+
+```kql
+// Query principal para detectar enumeración con BloodHound
+SecurityEvent
+| where EventID == 4662 // Directory service access
+| where AccessMask != "0x0"
+| summarize ObjectCount = dcount(ObjectName), AccessCount = count() by Account, Computer, bin(TimeGenerated, 5m)
+| where ObjectCount > 100 or AccessCount > 500
+| order by ObjectCount desc
+```
+
+```kql
+// Correlación con herramientas conocidas
+DeviceProcessEvents
+| where ProcessCommandLine contains "bloodhound" or ProcessCommandLine contains "sharphound"
+| join kind=inner (
+    SecurityEvent
+    | where EventID == 4662
+    | project TimeGenerated, Computer, Account, ObjectName
+) on $left.DeviceName == $right.Computer, $left.AccountName == $right.Account
+| project TimeGenerated, DeviceName, ProcessCommandLine, ObjectName
+```
+
+### Hunting avanzado
+
+```kql
+// Detección de consultas LDAP específicas de BloodHound
+Event
+| where Source == "Microsoft-Windows-LDAP-Client" and EventID == 30
+| where ParameterXml has_any ("member", "memberof", "distinguishedname", "objectsid")
+| summarize QueryCount = count(), UniqueQueries = dcount(ParameterXml) by Computer, UserName, bin(TimeGenerated, 5m)
+| where QueryCount > 50 or UniqueQueries > 20
+| order by QueryCount desc
+```
+
+```kql
+// Detección de acceso masivo a objetos de AD
+SecurityEvent
+| where EventID == 4662
+| where ObjectServer == "DS"
+| where Properties has_any ("{bf967aba-0de6-11d0-a285-00aa003049e2}", "{bf967a86-0de6-11d0-a285-00aa003049e2}")
+| summarize by TimeGenerated, Account, Computer, ObjectName, Properties
+| summarize ObjectCount = dcount(ObjectName) by Account, Computer, bin(TimeGenerated, 10m)
+| where ObjectCount > 1000
+| order by ObjectCount desc
+```
+
+---
+
 ## 🦾 Hardening y mitigación
 
 | Medida                                  | Descripción                                                                                      |

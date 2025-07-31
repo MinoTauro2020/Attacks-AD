@@ -96,6 +96,148 @@ index=dc_logs (EventCode=4768 OR EventCode=4771)
 | **Alerta 1**                            | Más de 10 eventos 4768/4771 por la misma IP/usuario en 3 minutos.                          |
 | **Alerta 2**                            | Secuencia de cuentas inexistentes o nombres de diccionario en intentos Kerberos.           |
 
+
+---
+
+## 🛡️ Detección con Windows Defender for Endpoint
+
+### Reglas de detección personalizadas
+
+```kql
+// Kerberos Brute Force - Detección de intentos masivos
+DeviceLogonEvents
+| where ActionType == "LogonFailed"
+| where Protocol == "Kerberos"
+| summarize FailedAttempts = count() by RemoteIP, AccountName, bin(Timestamp, 3m)
+| where FailedAttempts > 10
+| order by FailedAttempts desc
+```
+
+```kql
+// Detección de herramientas de fuerza bruta Kerberos
+DeviceProcessEvents
+| where ProcessCommandLine has_any ("kerbrute", "rubeus", "kerberoast", "krb5-user")
+| where ProcessCommandLine has_any ("bruteforce", "passwordspray", "userenum")
+| project Timestamp, DeviceName, AccountName, ProcessCommandLine, InitiatingProcessFileName
+| order by Timestamp desc
+```
+
+```kql
+// Detección de patrones de spray de contraseñas
+DeviceLogonEvents
+| where ActionType == "LogonFailed" and Protocol == "Kerberos"
+| summarize UniqueAccounts = dcount(AccountName), FailedAttempts = count() by RemoteIP, bin(Timestamp, 5m)
+| where UniqueAccounts > 5 and FailedAttempts > 20
+| order by UniqueAccounts desc
+```
+
+### Alertas recomendadas
+
+| Regla | Descripción | Severidad |
+|-------|-------------|-----------|
+| **Kerberos Brute Force** | Más de 10 fallos Kerberos desde una IP en 3 minutos | Alta |
+| **Password Spray** | Intentos contra múltiples cuentas desde una IP | Alta |
+| **Kerberos Tools** | Detección de herramientas de fuerza bruta | Media |
+
+---
+
+## 🦅 Detección con CrowdStrike Falcon
+
+### Hunting queries (Event Search)
+
+```sql
+-- Detección de fuerza bruta Kerberos
+event_platform=Win event_simpleName=UserLogonFailed
+| search FailureReason=*Kerberos* OR LogonType=3
+| bin _time span=3m
+| stats count as failed_attempts, dc(UserName) as unique_users by ComputerName, SourceIP, _time
+| where failed_attempts > 15 OR unique_users > 5
+| sort - failed_attempts
+```
+
+```sql
+-- Detección de herramientas de fuerza bruta
+event_platform=Win event_simpleName=ProcessRollup2 
+| search (FileName=*kerbrute* OR CommandLine=*kerbrute* OR CommandLine=*passwordspray*)
+| table _time, ComputerName, UserName, FileName, CommandLine, SHA256HashData
+| sort - _time
+```
+
+```sql
+-- Detección de patrones de enumeración de usuarios
+event_platform=Win event_simpleName=AuthActivityAuditLog
+| search LogonType=* FailureReason=*user*
+| bin _time span=2m
+| stats count as enum_attempts by ComputerName, SourceIP, _time
+| where enum_attempts > 20
+| sort - enum_attempts
+```
+
+### Custom IOAs (Indicators of Attack)
+
+```sql
+-- IOA para detectar spray de contraseñas distribuido
+event_platform=Win event_simpleName=UserLogonFailed
+| search FailureReason=*password* OR FailureReason=*credential*
+| bin _time span=5m
+| stats dc(ComputerName) as unique_targets, count as total_attempts by SourceIP, _time
+| where unique_targets > 3 AND total_attempts > 30
+```
+
+---
+
+## 🔍 Queries KQL para Microsoft Sentinel
+
+### Detección de Kerberos Brute Force
+
+```kql
+// Query principal para detectar fuerza bruta Kerberos
+SecurityEvent
+| where EventID in (4768, 4771, 4625)
+| where FailureReason has "Kerberos" or AuthenticationPackageName == "Kerberos"
+| summarize FailedAttempts = count(), UniqueAccounts = dcount(TargetUserName) by IpAddress, bin(TimeGenerated, 3m)
+| where FailedAttempts > 15 or UniqueAccounts > 5
+| order by FailedAttempts desc
+```
+
+```kql
+// Correlación con herramientas de ataque
+DeviceProcessEvents
+| where ProcessCommandLine contains "kerbrute" or ProcessCommandLine contains "passwordspray"
+| join kind=inner (
+    SecurityEvent
+    | where EventID in (4768, 4771) and FailureReason != ""
+    | project TimeGenerated, Computer, TargetUserName, IpAddress
+) on $left.DeviceName == $right.Computer
+| project TimeGenerated, DeviceName, ProcessCommandLine, TargetUserName, IpAddress
+```
+
+### Hunting avanzado
+
+```kql
+// Detección de spray de contraseñas coordinado
+SecurityEvent
+| where EventID == 4625 and FailureReason has_any ("password", "credential")
+| summarize FailedAttempts = count(), UniqueComputers = dcount(Computer), UniqueAccounts = dcount(TargetUserName) by IpAddress, bin(TimeGenerated, 10m)
+| where FailedAttempts > 50 or (UniqueComputers > 3 and UniqueAccounts > 10)
+| order by FailedAttempts desc
+```
+
+```kql
+// Detección de enumeración de usuarios válidos
+SecurityEvent
+| where EventID == 4768 // TGT request
+| where FailureReason == ""
+| summarize SuccessfulRequests = count() by IpAddress, bin(TimeGenerated, 5m)
+| join kind=inner (
+    SecurityEvent
+    | where EventID == 4771 // Pre-auth failed
+    | summarize FailedPreAuth = count() by IpAddress, bin(TimeGenerated, 5m)
+) on IpAddress, TimeGenerated
+| where FailedPreAuth > 20 and SuccessfulRequests > 5
+| project TimeGenerated, IpAddress, SuccessfulRequests, FailedPreAuth
+```
+
 ---
 
 ## 🦾 Hardening y mitigación
