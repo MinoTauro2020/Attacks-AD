@@ -91,6 +91,146 @@ index=security_logs (EventCode=4624 OR EventCode=4648 OR EventCode=10)
 
 ---
 
+## 🛡️ Detección con Windows Defender for Endpoint
+
+### Reglas de detección personalizadas
+
+```kql
+// Pass the Hash - Detección de logons con hash
+DeviceLogonEvents
+| where LogonType == "Network" 
+| where AuthenticationPackageName == "NTLM"
+| summarize LogonCount = count(), UniqueDevices = dcount(DeviceId) by AccountName, bin(Timestamp, 5m)
+| where LogonCount > 5 or UniqueDevices > 3
+| order by LogonCount desc
+```
+
+```kql
+// Detección de herramientas de extracción de credenciales
+DeviceProcessEvents
+| where ProcessCommandLine has_any ("mimikatz", "sekurlsa", "lsadump", "crackmapexec", "psexec") and ProcessCommandLine has_any ("-hashes", "::logonpasswords", "pass-the-hash")
+| project Timestamp, DeviceName, AccountName, ProcessCommandLine, InitiatingProcessFileName
+| order by Timestamp desc
+```
+
+```kql
+// Detección de acceso a LSASS sospechoso
+DeviceProcessEvents
+| where InitiatingProcessFileName !in ("winlogon.exe", "csrss.exe", "wininit.exe")
+| where ProcessCommandLine has "lsass" or FileName == "lsass.exe"
+| join kind=inner (DeviceFileEvents | where FileName == "lsass.exe") on DeviceId
+| project Timestamp, DeviceName, AccountName, InitiatingProcessFileName, ProcessCommandLine
+```
+
+### Alertas recomendadas
+
+| Regla | Descripción | Severidad |
+|-------|-------------|-----------|
+| **NTLM Lateral Movement** | Múltiples logons NTLM desde una cuenta en poco tiempo | Alta |
+| **Credential Extraction Tools** | Detección de Mimikatz y herramientas similares | Crítica |
+| **LSASS Access** | Acceso no autorizado al proceso LSASS | Alta |
+
+---
+
+## 🦅 Detección con CrowdStrike Falcon
+
+### Hunting queries (Event Search)
+
+```sql
+-- Detección de Pass the Hash basado en logons NTLM
+event_platform=Win event_simpleName=UserLogon 
+| search LogonType=3 AuthenticationPackageName=NTLM
+| bin _time span=5m
+| stats dc(ComputerName) as unique_systems, count as total_logons by UserName, _time
+| where unique_systems > 3 OR total_logons > 10
+| sort - unique_systems
+```
+
+```sql
+-- Detección de herramientas de Pass the Hash
+event_platform=Win event_simpleName=ProcessRollup2 
+| search (CommandLine=*crackmapexec* OR CommandLine=*psexec* OR CommandLine=*wmiexec*) AND CommandLine=*-hashes*
+| table _time, ComputerName, UserName, FileName, CommandLine, SHA256HashData
+| sort - _time
+```
+
+```sql
+-- Detección de acceso a memoria LSASS
+event_platform=Win event_simpleName=ProcessAccess
+| search TargetProcessName=*lsass.exe GrantedAccess=*PROCESS_VM_READ*
+| search NOT SourceProcessName IN (csrss.exe, winlogon.exe, wininit.exe, services.exe)
+| table _time, ComputerName, SourceProcessName, TargetProcessName, GrantedAccess
+```
+
+### Custom IOAs (Indicators of Attack)
+
+```sql
+-- IOA para detectar movimiento lateral rápido
+event_platform=Win event_simpleName=NetworkConnectIP4
+| search RemotePort IN (135, 139, 445, 3389)
+| bin _time span=1m
+| stats dc(RemoteAddressIP4) as unique_destinations by ComputerName, UserName, _time
+| where unique_destinations > 5
+```
+
+---
+
+## 🔍 Queries KQL para Microsoft Sentinel
+
+### Detección de Pass the Hash
+
+```kql
+// Query principal para detectar Pass the Hash
+SecurityEvent
+| where EventID == 4624
+| where LogonType == 3 and AuthenticationPackageName == "NTLM"
+| where Account !endswith "$"
+| summarize LogonCount = count(), UniqueComputers = dcount(Computer) by Account, IpAddress, bin(TimeGenerated, 5m)
+| where LogonCount > 5 or UniqueComputers > 2
+| order by LogonCount desc
+```
+
+```kql
+// Correlación con eventos de extracción de credenciales
+SecurityEvent
+| where EventID == 4624 and LogonType == 3 and AuthenticationPackageName == "NTLM"
+| join kind=inner (
+    DeviceProcessEvents
+    | where ProcessCommandLine contains "mimikatz" or ProcessCommandLine contains "lsadump"
+    | project TimeGenerated, DeviceName, ProcessCommandLine, AccountName
+) on $left.Account == $right.AccountName
+| project TimeGenerated, Computer, ProcessCommandLine, Account, IpAddress
+| where TimeGenerated1 > TimeGenerated // Pass the Hash después de extracción
+```
+
+### Hunting avanzado
+
+```kql
+// Detección de patrones de movimiento lateral
+SecurityEvent
+| where EventID in (4624, 4625)
+| where LogonType == 3
+| summarize SuccessfulLogons = countif(EventID == 4624), FailedLogons = countif(EventID == 4625), UniqueComputers = dcount(Computer) by Account, IpAddress, bin(TimeGenerated, 10m)
+| where UniqueComputers > 3 and SuccessfulLogons > 5
+| order by UniqueComputers desc
+```
+
+```kql
+// Detección de uso de shares administrativos tras Pass the Hash
+SecurityEvent
+| where EventID == 5140 // Acceso a share de red
+| where ShareName in ("ADMIN$", "C$", "IPC$")
+| join kind=inner (
+    SecurityEvent
+    | where EventID == 4624 and LogonType == 3 and AuthenticationPackageName == "NTLM"
+    | project TimeGenerated, Account, Computer, IpAddress
+) on Computer, Account
+| where TimeGenerated1 > TimeGenerated and TimeGenerated1 - TimeGenerated < 1h
+| project TimeGenerated1, Computer, Account, ShareName, IpAddress
+```
+
+---
+
 ## 🦾 Hardening y mitigación
 
 | Medida                                  | Descripción                                                                                      |

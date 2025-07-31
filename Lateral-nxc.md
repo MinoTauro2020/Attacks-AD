@@ -73,6 +73,146 @@ index=dc_logs (EventCode=4776 OR EventCode=4624 OR EventCode=5140 OR EventCode=5
 
 ---
 
+## 🛡️ Detección con Windows Defender for Endpoint
+
+### Reglas de detección personalizadas
+
+```kql
+// NetExec Lateral Movement - Detección de movimiento lateral con nxc
+DeviceNetworkEvents
+| where RemotePort in (445, 135, 139)
+| where ActionType == "ConnectionSuccess"
+| summarize ConnectionCount = count(), UniqueTargets = dcount(RemoteIP) by DeviceId, bin(Timestamp, 5m)
+| where ConnectionCount > 10 or UniqueTargets > 5
+| order by ConnectionCount desc
+```
+
+```kql
+// Detección de herramientas NetExec
+DeviceProcessEvents
+| where ProcessCommandLine has_any ("nxc", "netexec", "crackmapexec", "cme") and ProcessCommandLine has_any ("smb", "wmi", "ssh", "rdp")
+| project Timestamp, DeviceName, AccountName, ProcessCommandLine, InitiatingProcessFileName
+| order by Timestamp desc
+```
+
+```kql
+// Detección de acceso a shares administrativos
+DeviceEvents
+| where ActionType == "FileAccess"
+| where FolderPath has_any ("ADMIN$", "C$", "IPC$")
+| summarize ShareAccess = count() by DeviceId, AccountName, bin(Timestamp, 5m)
+| where ShareAccess > 5
+| order by ShareAccess desc
+```
+
+### Alertas recomendadas
+
+| Regla | Descripción | Severidad |
+|-------|-------------|-----------|
+| **Lateral Movement Spike** | Múltiples conexiones SMB/WMI en poco tiempo | Alta |
+| **NetExec Tools** | Detección de herramientas NetExec/CrackMapExec | Alta |
+| **Admin Share Access** | Acceso frecuente a shares administrativos | Media |
+
+---
+
+## 🦅 Detección con CrowdStrike Falcon
+
+### Hunting queries (Event Search)
+
+```sql
+-- Detección de movimiento lateral con NetExec
+event_platform=Win event_simpleName=NetworkConnectIP4
+| search RemotePort IN (445, 135, 139, 5985, 5986)
+| bin _time span=5m
+| stats dc(RemoteAddressIP4) as unique_targets, count as total_connections by ComputerName, UserName, _time
+| where unique_targets > 5 OR total_connections > 20
+| sort - unique_targets
+```
+
+```sql
+-- Detección de herramientas NetExec
+event_platform=Win event_simpleName=ProcessRollup2 
+| search (FileName=*nxc* OR FileName=*netexec* OR FileName=*crackmapexec* OR CommandLine=*nxc* OR CommandLine=*cme*)
+| table _time, ComputerName, UserName, FileName, CommandLine, SHA256HashData
+| sort - _time
+```
+
+```sql
+-- Detección de ejecución remota via WMI/SMB
+event_platform=Win event_simpleName=RemoteProcessCreation
+| search ParentProcessName IN (*wmiprvse.exe*, *services.exe*, *svchost.exe*)
+| table _time, ComputerName, ProcessName, CommandLine, ParentProcessName
+| sort - _time
+```
+
+### Custom IOAs (Indicators of Attack)
+
+```sql
+-- IOA para detectar spray de credenciales
+event_platform=Win event_simpleName=UserLogon
+| search LogonType=3
+| bin _time span=2m
+| stats dc(ComputerName) as target_systems by UserName, SourceIP, _time
+| where target_systems > 3
+```
+
+---
+
+## 🔍 Queries KQL para Microsoft Sentinel
+
+### Detección de Lateral Movement con NetExec
+
+```kql
+// Query principal para detectar movimiento lateral
+SecurityEvent
+| where EventID == 4624
+| where LogonType == 3
+| where Account !endswith "$"
+| summarize LogonCount = count(), UniqueComputers = dcount(Computer) by Account, IpAddress, bin(TimeGenerated, 5m)
+| where LogonCount > 10 or UniqueComputers > 5
+| order by LogonCount desc
+```
+
+```kql
+// Correlación con herramientas NetExec
+DeviceProcessEvents
+| where ProcessCommandLine has_any ("nxc", "netexec", "crackmapexec")
+| join kind=inner (
+    SecurityEvent
+    | where EventID == 4624 and LogonType == 3
+    | project TimeGenerated, Computer, Account, IpAddress
+) on $left.DeviceName == $right.Computer
+| project TimeGenerated, DeviceName, ProcessCommandLine, Account, IpAddress
+```
+
+### Hunting avanzado
+
+```kql
+// Detección de ejecución remota coordinada
+SecurityEvent
+| where EventID == 4688 // Process creation
+| where NewProcessName has_any ("cmd.exe", "powershell.exe", "wmic.exe")
+| join kind=inner (
+    SecurityEvent
+    | where EventID == 4624 and LogonType == 3
+    | project TimeGenerated, Computer, Account, IpAddress, LogonId
+) on Computer, LogonId
+| where TimeGenerated > TimeGenerated1 and TimeGenerated - TimeGenerated1 < 5m
+| project TimeGenerated, Computer, Account, NewProcessName, CommandLine, IpAddress
+```
+
+```kql
+// Detección de acceso a múltiples shares en red
+SecurityEvent
+| where EventID == 5140 // Network share accessed
+| where ShareName in ("ADMIN$", "C$", "IPC$")
+| summarize AccessCount = count(), UniqueShares = dcount(ShareName), UniqueComputers = dcount(Computer) by Account, IpAddress, bin(TimeGenerated, 10m)
+| where AccessCount > 10 or UniqueComputers > 3
+| order by AccessCount desc
+```
+
+---
+
 ## 🦾 Hardening y mitigación
 
 | Medida                                  | Descripción                                                                                      |

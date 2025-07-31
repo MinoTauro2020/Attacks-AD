@@ -123,6 +123,124 @@ index=dc_logs sourcetype=WinEventLog:Security EventCode=4768 Pre_Authentication_
 
 ---
 
+## 🛡️ Detección con Windows Defender for Endpoint
+
+### Reglas de detección personalizadas
+
+```kql
+// AS-REP Roasting - Solicitudes sin preautenticación
+DeviceLogonEvents
+| where ActionType == "LogonFailed" or ActionType == "LogonSuccess"
+| join kind=inner (
+    DeviceEvents
+    | where ActionType == "KerberosAsReqWithoutPreauth"
+    | summarize AsRepCount = count() by DeviceId, AccountName, bin(Timestamp, 5m)
+    | where AsRepCount > 3
+) on DeviceId, AccountName
+| project Timestamp, DeviceId, DeviceName, AccountName, AsRepCount
+| order by Timestamp desc
+```
+
+```kql
+// Detección de herramientas de AS-REP Roasting
+DeviceProcessEvents
+| where ProcessCommandLine has_any ("GetNPUsers", "Rubeus", "asreproast", "Invoke-ASRepRoast")
+| project Timestamp, DeviceName, AccountName, ProcessCommandLine, InitiatingProcessFileName
+| order by Timestamp desc
+```
+
+### Alertas recomendadas
+
+| Regla | Descripción | Severidad |
+|-------|-------------|-----------|
+| **AS-REP No Preauth Spike** | Más de 5 solicitudes AS-REP sin preautenticación en 5 minutos | Media |
+| **AS-REP Roasting Tools** | Detección de herramientas conocidas (GetNPUsers, Rubeus, etc.) | Alta |
+| **External AS-REP Requests** | Solicitudes AS-REP desde IPs externas | Alta |
+
+---
+
+## 🦅 Detección con CrowdStrike Falcon
+
+### Hunting queries (Event Search)
+
+```sql
+-- Detección de AS-REP Roasting basado en eventos Kerberos
+event_platform=Win event_simpleName=AuthActivityAuditLog 
+| search LogonType=* AuthenticationPackageName=Kerberos
+| bin _time span=5m
+| stats dc(TargetUserName) as unique_targets, count as total_attempts by ComputerName, UserName, _time
+| where unique_targets > 5 OR total_attempts > 10
+| sort - total_attempts
+```
+
+```sql
+-- Detección de herramientas de AS-REP Roasting
+event_platform=Win event_simpleName=ProcessRollup2 
+| search (FileName=*rubeus* OR CommandLine=*GetNPUsers* OR CommandLine=*asreproast*)
+| table _time, ComputerName, UserName, FileName, CommandLine, ParentProcessId
+| sort - _time
+```
+
+### Custom IOAs (Indicators of Attack)
+
+```sql
+-- IOA para detectar enumeración de usuarios sin preautenticación
+event_platform=Win event_simpleName=DnsRequest
+| search DomainName=*_kerberos*
+| bin _time span=1m
+| stats count by ComputerName, UserName, DomainName, _time
+| where count > 10
+```
+
+---
+
+## 🔍 Queries KQL para Microsoft Sentinel
+
+### Detección de AS-REP Roasting
+
+```kql
+// Query principal para detectar AS-REP Roasting
+SecurityEvent
+| where EventID == 4768
+| where PreAuthType == "0" // Sin preautenticación
+| where TargetUserName !endswith "$"
+| summarize count() by Account, TargetUserName, IpAddress, bin(TimeGenerated, 5m)
+| where count_ > 2
+| order by TimeGenerated desc
+```
+
+```kql
+// Correlación con actividad de enumeración
+SecurityEvent
+| where EventID == 4768 and PreAuthType == "0"
+| join kind=inner (
+    DeviceProcessEvents
+    | where ProcessCommandLine contains "GetNPUsers" or ProcessCommandLine contains "asreproast"
+    | project TimeGenerated, DeviceName, ProcessCommandLine, AccountName
+) on $left.Account == $right.AccountName
+| project TimeGenerated, DeviceName, ProcessCommandLine, Account, TargetUserName, IpAddress
+```
+
+### Hunting avanzado
+
+```kql
+// Detección de cuentas sin preautenticación recientemente modificadas
+SecurityEvent
+| where EventID == 4738 // Cambio en cuenta de usuario
+| where TargetUserName !endswith "$"
+| where SubjectUserName != TargetUserName
+| summarize by TimeGenerated, TargetUserName, SubjectUserName, Computer
+| join kind=inner (
+    SecurityEvent
+    | where EventID == 4768 and PreAuthType == "0"
+    | project TimeGenerated, TargetUserName, IpAddress
+) on TargetUserName
+| where TimeGenerated1 > TimeGenerated // AS-REP después del cambio
+| project TimeGenerated1, TargetUserName, SubjectUserName, Computer, IpAddress
+```
+
+---
+
 ## 🦾 Hardening y mitigación
 
 | Medida                                   | Descripción                                                                                  |

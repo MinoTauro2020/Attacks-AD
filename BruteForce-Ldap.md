@@ -98,6 +98,143 @@ index=dc_logs (EventCode=2889 OR EventCode=4625)
 
 ---
 
+## 🛡️ Detección con Windows Defender for Endpoint
+
+### Reglas de detección personalizadas
+
+```kql
+// LDAP Brute Force - Detección de intentos masivos
+DeviceNetworkEvents
+| where RemotePort in (389, 636, 3268, 3269)
+| where ActionType == "ConnectionFailed" or ActionType == "ConnectionSuccess"
+| summarize FailedConnections = countif(ActionType == "ConnectionFailed"), TotalConnections = count() by RemoteIP, bin(Timestamp, 3m)
+| where FailedConnections > 15 or TotalConnections > 30
+| order by FailedConnections desc
+```
+
+```kql
+// Detección de herramientas de fuerza bruta LDAP
+DeviceProcessEvents
+| where ProcessCommandLine has_any ("ldapbrute", "ldap-brute", "kerbrute", "ldapsearch") and ProcessCommandLine has_any ("password", "brute", "wordlist")
+| project Timestamp, DeviceName, AccountName, ProcessCommandLine, InitiatingProcessFileName
+| order by Timestamp desc
+```
+
+```kql
+// Detección de binds LDAP anómalos
+DeviceEvents
+| where ActionType == "LdapBind"
+| where AdditionalFields has "AuthenticationFailed"
+| summarize FailedBinds = count() by DeviceId, RemoteIP, bin(Timestamp, 5m)
+| where FailedBinds > 10
+| order by FailedBinds desc
+```
+
+### Alertas recomendadas
+
+| Regla | Descripción | Severidad |
+|-------|-------------|-----------|
+| **LDAP Brute Force** | Más de 15 fallos de conexión LDAP en 3 minutos | Alta |
+| **LDAP Tools** | Detección de herramientas de fuerza bruta LDAP | Media |
+| **Failed LDAP Binds** | Múltiples fallos de bind LDAP | Media |
+
+---
+
+## 🦅 Detección con CrowdStrike Falcon
+
+### Hunting queries (Event Search)
+
+```sql
+-- Detección de fuerza bruta LDAP
+event_platform=Win event_simpleName=NetworkConnectIP4
+| search RemotePort IN (389, 636, 3268, 3269)
+| bin _time span=3m
+| stats count as ldap_connections, dc(RemoteAddressIP4) as unique_targets by ComputerName, UserName, _time
+| where ldap_connections > 20
+| sort - ldap_connections
+```
+
+```sql
+-- Detección de herramientas de LDAP brute force
+event_platform=Win event_simpleName=ProcessRollup2 
+| search (CommandLine=*ldapbrute* OR CommandLine=*ldap-brute* OR CommandLine=*ldapsearch* AND CommandLine=*password*)
+| table _time, ComputerName, UserName, FileName, CommandLine, SHA256HashData
+| sort - _time
+```
+
+```sql
+-- Detección de autenticación LDAP fallida masiva
+event_platform=Win event_simpleName=LdapBindAttempt
+| search BindResult=*failed* OR BindResult=*invalid*
+| bin _time span=2m
+| stats count as failed_binds by ComputerName, TargetServer, UserName, _time
+| where failed_binds > 15
+| sort - failed_binds
+```
+
+### Custom IOAs (Indicators of Attack)
+
+```sql
+-- IOA para detectar spray de contraseñas LDAP
+event_platform=Win event_simpleName=LdapSearch
+| search SearchFilter=*user* SearchBase=*
+| bin _time span=5m
+| stats dc(SearchFilter) as unique_searches, count as total_searches by ComputerName, UserName, _time
+| where unique_searches > 50 OR total_searches > 100
+```
+
+---
+
+## 🔍 Queries KQL para Microsoft Sentinel
+
+### Detección de LDAP Brute Force
+
+```kql
+// Query principal para detectar fuerza bruta LDAP
+Event
+| where Source == "Microsoft-Windows-LDAP-Client" and EventID in (30, 32)
+| where EventData has "failed" or EventData has "error"
+| summarize FailedAttempts = count() by Computer, UserName, SourceIP = extract(@"(\d+\.\d+\.\d+\.\d+)", 1, EventData), bin(TimeGenerated, 3m)
+| where FailedAttempts > 15
+| order by FailedAttempts desc
+```
+
+```kql
+// Correlación con herramientas de ataque
+DeviceProcessEvents
+| where ProcessCommandLine contains "ldapbrute" or (ProcessCommandLine contains "ldapsearch" and ProcessCommandLine contains "password")
+| join kind=inner (
+    Event
+    | where Source == "Microsoft-Windows-LDAP-Client" and EventID in (30, 32)
+    | project TimeGenerated, Computer, UserName, EventData
+) on $left.DeviceName == $right.Computer
+| project TimeGenerated, DeviceName, ProcessCommandLine, UserName, EventData
+```
+
+### Hunting avanzado
+
+```kql
+// Detección de enumeración de usuarios via LDAP
+Event
+| where Source == "Microsoft-Windows-LDAP-Client" and EventID == 30
+| where EventData has "sAMAccountName" or EventData has "userPrincipalName"
+| summarize QueryCount = count(), UniqueFilters = dcount(extract(@"filter=([^,}]+)", 1, EventData)) by Computer, UserName, bin(TimeGenerated, 10m)
+| where QueryCount > 100 or UniqueFilters > 50
+| order by QueryCount desc
+```
+
+```kql
+// Detección de spray de contraseñas coordinado via LDAP
+SecurityEvent
+| where EventID == 4625 // Failed logon
+| where LogonType == 3 and AuthenticationPackageName == "Negotiate"
+| summarize FailedLogons = count(), UniqueAccounts = dcount(TargetUserName), UniqueComputers = dcount(Computer) by IpAddress, bin(TimeGenerated, 10m)
+| where FailedLogons > 50 or (UniqueAccounts > 20 and UniqueComputers > 5)
+| order by FailedLogons desc
+```
+
+---
+
 ## 🦾 Hardening y mitigación
 
 | Medida                                   | Descripción                                                                                 |

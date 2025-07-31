@@ -88,6 +88,141 @@ index=sysmon_logs EventCode=1
 
 ---
 
+## 🛡️ Detección con Windows Defender for Endpoint
+
+### Reglas de detección personalizadas
+
+```kql
+// RBCD - Detección de modificaciones en msDS-AllowedToActOnBehalfOfOtherIdentity
+DeviceEvents
+| where ActionType == "LdapModify"
+| where AdditionalFields has "msDS-AllowedToActOnBehalfOfOtherIdentity"
+| project Timestamp, DeviceName, AccountName, AdditionalFields
+| order by Timestamp desc
+```
+
+```kql
+// Detección de herramientas RBCD conocidas
+DeviceProcessEvents
+| where ProcessCommandLine has_any ("rbcd.py", "addcomputer.py", "getST.py", "resource-based", "constrained-delegation")
+| project Timestamp, DeviceName, AccountName, ProcessCommandLine, InitiatingProcessFileName
+| order by Timestamp desc
+```
+
+```kql
+// Detección de creación masiva de cuentas de computadora
+DeviceEvents
+| where ActionType == "UserAccountCreated"
+| where AccountName endswith "$"
+| summarize ComputerAccountsCreated = count() by InitiatingProcessAccountName, bin(Timestamp, 1h)
+| where ComputerAccountsCreated > 3
+| order by ComputerAccountsCreated desc
+```
+
+### Alertas recomendadas
+
+| Regla | Descripción | Severidad |
+|-------|-------------|-----------|
+| **RBCD Attribute Modification** | Modificación del atributo msDS-AllowedToActOnBehalfOfOtherIdentity | Alta |
+| **RBCD Tools** | Detección de herramientas de explotación RBCD | Alta |
+| **Mass Computer Creation** | Creación de múltiples cuentas de computadora | Media |
+
+---
+
+## 🦅 Detección con CrowdStrike Falcon
+
+### Hunting queries (Event Search)
+
+```sql
+-- Detección de RBCD basado en modificaciones LDAP
+event_platform=Win event_simpleName=LdapModify
+| search AttributeName=*msDS-AllowedToActOnBehalfOfOtherIdentity*
+| table _time, ComputerName, UserName, AttributeName, AttributeValue, TargetObject
+| sort - _time
+```
+
+```sql
+-- Detección de herramientas RBCD
+event_platform=Win event_simpleName=ProcessRollup2 
+| search (CommandLine=*rbcd* OR CommandLine=*addcomputer* OR CommandLine=*getST* OR CommandLine=*constrained-delegation*)
+| table _time, ComputerName, UserName, FileName, CommandLine, SHA256HashData
+| sort - _time
+```
+
+```sql
+-- Detección de solicitudes TGS con delegación
+event_platform=Win event_simpleName=AuthActivityAuditLog
+| search ServiceName=* DelegatedAuthentication=True
+| table _time, ComputerName, UserName, ServiceName, TargetUserName
+| sort - _time
+```
+
+### Custom IOAs (Indicators of Attack)
+
+```sql
+-- IOA para detectar abuso de delegación restringida
+event_platform=Win event_simpleName=KerberosLogon
+| search LogonType=5 DelegationType=ResourceBasedConstrained
+| stats count by ComputerName, UserName, ServiceName
+| where count > 5
+```
+
+---
+
+## 🔍 Queries KQL para Microsoft Sentinel
+
+### Detección de RBCD
+
+```kql
+// Query principal para detectar ataques RBCD
+SecurityEvent
+| where EventID == 4662 // Directory service access
+| where ObjectName has "msDS-AllowedToActOnBehalfOfOtherIdentity"
+| where AccessMask != "0x0"
+| project TimeGenerated, Computer, Account, ObjectName, AccessMask, AdditionalInfo
+| order by TimeGenerated desc
+```
+
+```kql
+// Correlación con herramientas de explotación
+DeviceProcessEvents
+| where ProcessCommandLine has_any ("rbcd", "addcomputer", "getST")
+| join kind=inner (
+    SecurityEvent
+    | where EventID == 4662 and ObjectName has "msDS-AllowedToActOnBehalfOfOtherIdentity"
+    | project TimeGenerated, Computer, Account, ObjectName
+) on $left.DeviceName == $right.Computer
+| project TimeGenerated, DeviceName, ProcessCommandLine, ObjectName
+```
+
+### Hunting avanzado
+
+```kql
+// Detección de creación de cuentas de computadora seguida de modificación RBCD
+SecurityEvent
+| where EventID == 4741 // Computer account created
+| join kind=inner (
+    SecurityEvent
+    | where EventID == 4662 and ObjectName has "msDS-AllowedToActOnBehalfOfOtherIdentity"
+    | project TimeGenerated, Computer, Account, ObjectName
+) on Computer
+| where TimeGenerated1 > TimeGenerated and TimeGenerated1 - TimeGenerated < 1h
+| project TimeGenerated1, Computer, Account1, NewTargetUserName, ObjectName
+```
+
+```kql
+// Detección de uso de tickets S4U2Self/S4U2Proxy
+SecurityEvent
+| where EventID == 4769 // Service ticket requested
+| where ServiceName has "$" and not(ServiceName endswith "krbtgt")
+| where TicketOptions has "0x40810000" // Constrained delegation
+| summarize TicketCount = count() by Account, ServiceName, Computer, bin(TimeGenerated, 5m)
+| where TicketCount > 5
+| order by TicketCount desc
+```
+
+---
+
 ## 🦾 Hardening y mitigación
 
 | Medida                                         | Descripción                                                                                       |

@@ -150,6 +150,147 @@ index=dc_logs sourcetype=WinEventLog:Security EventCode=4624
 
 ---
 
+## 🛡️ Detección con Windows Defender for Endpoint
+
+### Reglas de detección personalizadas
+
+```kql
+// Coercion Attacks - Detección de conexiones forzadas NTLM
+DeviceNetworkEvents
+| where RemotePort in (445, 135, 139)
+| where ActionType == "ConnectionSuccess"
+| summarize ConnectionCount = count(), UniqueRemoteIPs = dcount(RemoteIP) by DeviceId, LocalPort, bin(Timestamp, 5m)
+| where ConnectionCount > 10 or UniqueRemoteIPs > 5
+| order by ConnectionCount desc
+```
+
+```kql
+// Detección de herramientas de coerción conocidas
+DeviceProcessEvents
+| where ProcessCommandLine has_any ("coercer", "petitpotam", "printerbug", "spoolsample", "dfscoerce")
+| project Timestamp, DeviceName, AccountName, ProcessCommandLine, InitiatingProcessFileName
+| order by Timestamp desc
+```
+
+```kql
+// Detección de ataques contra servicios vulnerables
+DeviceNetworkEvents
+| where RemotePort in (445, 135) and ActionType == "ConnectionSuccess"
+| join kind=inner (
+    DeviceEvents
+    | where ActionType has_any ("RpcCall", "NamedPipeAccess")
+    | where AdditionalFields has_any ("spoolss", "efsrpc", "dfsnm", "fsrvp")
+) on DeviceId
+| project Timestamp, DeviceName, RemoteIP, RemotePort, AdditionalFields
+```
+
+### Alertas recomendadas
+
+| Regla | Descripción | Severidad |
+|-------|-------------|-----------|
+| **NTLM Coercion Spike** | Múltiples conexiones forzadas en poco tiempo | Alta |
+| **Coercion Tools** | Detección de herramientas de coerción conocidas | Alta |
+| **Vulnerable Service Access** | Acceso a servicios vulnerables a coerción | Media |
+
+---
+
+## 🦅 Detección con CrowdStrike Falcon
+
+### Hunting queries (Event Search)
+
+```sql
+-- Detección de ataques de coerción basado en conexiones RPC/SMB
+event_platform=Win event_simpleName=NetworkConnectIP4
+| search RemotePort IN (445, 135, 139)
+| bin _time span=5m
+| stats dc(RemoteAddressIP4) as unique_targets, count as total_connections by ComputerName, UserName, _time
+| where unique_targets > 5 OR total_connections > 20
+| sort - unique_targets
+```
+
+```sql
+-- Detección de herramientas de coerción
+event_platform=Win event_simpleName=ProcessRollup2 
+| search (FileName=*coercer* OR CommandLine=*petitpotam* OR CommandLine=*printerbug* OR CommandLine=*spoolsample*)
+| table _time, ComputerName, UserName, FileName, CommandLine, SHA256HashData
+| sort - _time
+```
+
+```sql
+-- Detección de acceso a named pipes vulnerables
+event_platform=Win event_simpleName=NamedPipeEvent
+| search PipeName IN (*spoolss*, *efsrpc*, *lsarpc*, *netlogon*)
+| table _time, ComputerName, PipeName, ProcessName, UserName
+| sort - _time
+```
+
+### Custom IOAs (Indicators of Attack)
+
+```sql
+-- IOA para detectar patrones de coerción NTLM
+event_platform=Win event_simpleName=AuthActivityAuditLog
+| search LogonType=3 AuthenticationPackageName=NTLM
+| bin _time span=1m
+| stats dc(TargetUserName) as unique_accounts by ComputerName, UserName, _time
+| where unique_accounts > 3
+```
+
+---
+
+## 🔍 Queries KQL para Microsoft Sentinel
+
+### Detección de Coercion Attacks
+
+```kql
+// Query principal para detectar ataques de coerción
+SecurityEvent
+| where EventID == 4624
+| where LogonType == 3 and AuthenticationPackageName == "NTLM"
+| where Account endswith "$"
+| summarize LogonCount = count(), UniqueComputers = dcount(Computer) by Account, IpAddress, bin(TimeGenerated, 5m)
+| where LogonCount > 5 or UniqueComputers > 2
+| order by LogonCount desc
+```
+
+```kql
+// Correlación con herramientas de coerción
+DeviceProcessEvents
+| where ProcessCommandLine has_any ("petitpotam", "coercer", "printerbug", "spoolsample")
+| join kind=inner (
+    SecurityEvent
+    | where EventID == 4624 and LogonType == 3 and Account endswith "$"
+    | project TimeGenerated, Computer, Account, IpAddress
+) on $left.DeviceName == $right.Computer
+| project TimeGenerated, DeviceName, ProcessCommandLine, Account, IpAddress
+```
+
+### Hunting avanzado
+
+```kql
+// Detección de acceso a servicios vulnerables
+SecurityEvent
+| where EventID == 5145 // Object access
+| where ShareName in ("IPC$", "ADMIN$") and RelativeTargetName has_any ("spoolss", "efsrpc", "lsarpc")
+| summarize AccessCount = count() by Account, IpAddress, RelativeTargetName, bin(TimeGenerated, 5m)
+| where AccessCount > 3
+| order by AccessCount desc
+```
+
+```kql
+// Detección de relay posterior a coerción
+SecurityEvent
+| where EventID == 4624 and LogonType == 3 and Account endswith "$"
+| join kind=inner (
+    SecurityEvent
+    | where EventID == 4624 and LogonType == 3 and not(Account endswith "$")
+    | project TimeGenerated, Computer, Account, IpAddress
+) on IpAddress
+| where TimeGenerated1 > TimeGenerated and TimeGenerated1 - TimeGenerated < 10m
+| project TimeGenerated1, Computer1, Account1, IpAddress, TimeGenerated, Computer, Account
+```
+
+---
+
 ## 🦾 Hardening y mitigación
 
 | Medida                                       | Descripción                                                                                      |
