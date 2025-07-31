@@ -142,6 +142,118 @@ index="*" 4769
 
 ---
 
+## 🛡️ Detección con Windows Defender for Endpoint
+
+### Reglas de detección personalizadas
+
+```kql
+// Kerberoasting - Solicitudes masivas de tickets TGS
+DeviceLogonEvents
+| where ActionType == "LogonSuccess"
+| join kind=inner (
+    DeviceEvents
+    | where ActionType == "KerberosTgsRequested"
+    | summarize TgsCount = count() by DeviceId, AccountName, bin(Timestamp, 5m)
+    | where TgsCount > 5
+) on DeviceId, AccountName
+| project Timestamp, DeviceId, DeviceName, AccountName, TgsCount
+| order by Timestamp desc
+```
+
+```kql
+// Detección de uso de herramientas conocidas de Kerberoasting
+DeviceProcessEvents
+| where ProcessCommandLine has_any ("GetUserSPNs", "Rubeus", "kerberoast", "Invoke-Kerberoast")
+| project Timestamp, DeviceName, AccountName, ProcessCommandLine, InitiatingProcessFileName
+| order by Timestamp desc
+```
+
+### Alertas recomendadas
+
+| Regla | Descripción | Severidad |
+|-------|-------------|-----------|
+| **TGS Request Spike** | Más de 10 solicitudes TGS en 5 minutos desde un mismo usuario | Media |
+| **Kerberoasting Tools** | Detección de herramientas conocidas (Rubeus, GetUserSPNs, etc.) | Alta |
+| **RC4 TGS Requests** | Solicitudes TGS con cifrado RC4 en cuentas críticas | Media |
+
+---
+
+## 🦅 Detección con CrowdStrike Falcon
+
+### Hunting queries (Event Search)
+
+```sql
+-- Detección de Kerberoasting basado en eventos de red
+event_platform=Win event_simpleName=NetworkConnectIP4 
+| search (RemotePort=88 OR RemotePort=464)
+| stats dc(RemoteAddressIP4) as unique_dcs, count as total_connections by ComputerName, UserName
+| where unique_dcs > 1 AND total_connections > 10
+| sort - total_connections
+```
+
+```sql
+-- Detección de herramientas de Kerberoasting
+event_platform=Win event_simpleName=ProcessRollup2 
+| search (FileName=*rubeus* OR FileName=*GetUserSPNs* OR ImageFileName=*powershell* CommandLine=*kerberoast*)
+| table _time, ComputerName, UserName, FileName, CommandLine, ParentProcessId
+| sort - _time
+```
+
+### Custom IOAs (Indicators of Attack)
+
+```sql
+-- IOA para detectar patrones de Kerberoasting
+event_platform=Win event_simpleName=AuthActivityAuditLog
+| search LogonType=3 TargetUserName!=*$ 
+| bin _time span=5m
+| stats dc(TargetUserName) as unique_targets by ComputerName, UserName, _time
+| where unique_targets > 5
+```
+
+---
+
+## 🔍 Queries KQL para Microsoft Sentinel
+
+### Detección de Kerberoasting
+
+```kql
+// Query principal para detectar Kerberoasting
+SecurityEvent
+| where EventID == 4769
+| where ServiceName !endswith "$"
+| where ServiceName !contains "krbtgt"
+| summarize count() by Account, ServiceName, IpAddress, bin(TimeGenerated, 5m)
+| where count_ > 3
+| order by TimeGenerated desc
+```
+
+```kql
+// Correlación con herramientas de ataque
+DeviceProcessEvents
+| where ProcessCommandLine contains "GetUserSPNs" or ProcessCommandLine contains "Rubeus" or ProcessCommandLine contains "kerberoast"
+| join kind=inner (
+    SecurityEvent
+    | where EventID == 4769
+    | project TimeGenerated, Account, IpAddress, ServiceName
+) on $left.AccountName == $right.Account
+| project TimeGenerated, DeviceName, ProcessCommandLine, Account, ServiceName, IpAddress
+```
+
+### Hunting avanzado
+
+```kql
+// Detección de patrones anómalos en solicitudes TGS
+SecurityEvent
+| where EventID == 4769
+| where TicketEncryptionType == "0x17" // RC4
+| where ServiceName has_any ("admin", "svc", "sql", "backup", "service")
+| summarize RequestCount = count(), UniqueServices = dcount(ServiceName) by Account, IpAddress, bin(TimeGenerated, 1h)
+| where RequestCount > 5 or UniqueServices > 3
+| order by RequestCount desc
+```
+
+---
+
 ## 🦾 Hardening y mitigación
 
 | Medida                                   | Descripción                                                                                  |
