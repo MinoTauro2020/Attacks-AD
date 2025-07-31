@@ -180,8 +180,8 @@ Este documento recopila todas las técnicas de pentesting en Active Directory or
 |---------|-------------|----------------|
 | **PrintNightmare (CVE-2021-34527)** | cube0x0's exploit | ✅ (CVE-PrintNightmare.md) |
 | **noPac (CVE-2021-42278/42287)** | sam-the-admin, noPac.py | ✅ (noPac.md) |
-| **ZeroLogon (CVE-2020-1472)** | zerologon.py | ❌ |
-| **MS14-068 (CVE-2014-6324)** | goldenPac.py, kekeo | ❌ |
+| **ZeroLogon (CVE-2020-1472)** | zerologon.py | ✅ (CVE-ZeroLogon.md) |
+| **MS14-068 (CVE-2014-6324)** | goldenPac.py, kekeo | ✅ (CVE-MS14-068.md) |
 
 ---
 
@@ -341,7 +341,7 @@ Este documento recopila todas las técnicas de pentesting en Active Directory or
 
 ## 📊 Estado Actual del Repositorio
 
-### ✅ Técnicas ya Documentadas (28)
+### ✅ Técnicas ya Documentadas (30)
 - AS-REP Roasting
 - Kerberoasting  
 - Pass-the-Hash
@@ -350,6 +350,8 @@ Este documento recopila todas las técnicas de pentesting en Active Directory or
 - BloodHound Usage
 - PrintNightmare (CVE-2021-34527)
 - noPac (CVE-2021-42278/42287)
+- ZeroLogon (CVE-2020-1472)
+- MS14-068 (CVE-2014-6324)
 - Enumeration via RPC, LDAP, Users
 - Anonymous Logon techniques
 - Lateral Movement with NetExec
@@ -366,8 +368,7 @@ Este documento recopila todas las técnicas de pentesting en Active Directory or
 4. **Unconstrained/Constrained Delegation**
 5. **Password Spraying y Credential Stuffing**
 6. **WMI/DCOM/WinRM Execution**
-7. **ZeroLogon (CVE-2020-1472)**
-8. **DNS Admin Privilege Escalation**
+7. **DNS Admin Privilege Escalation**
 
 #### 🟡 Prioridad Media (Técnicas Especializadas):
 1. **Shadow Credentials**
@@ -397,5 +398,5 @@ Este documento recopila todas las técnicas de pentesting en Active Directory or
 
 **Documento creado:** Julio 2024  
 **Técnicas identificadas:** ~150+ técnicas de AD pentesting  
-**Estado actual:** 28 documentadas, >100 pendientes  
+**Estado actual:** 30 documentadas, >98 pendientes  
 **Fuentes:** Recopilación de recursos estándar de AD pentesting  
