@@ -1,6 +1,6 @@
 # Attacks-AD
 
-Repositorio de referencia y ayuda rápida sobre ataques, técnicas y hardening en Active Directory, especialmente centrado en suplantación de identidad (impersonation), ataques de Kerberos y abuso de servicios.
+Repositorio de referencia y ayuda rápida sobre ataques, técnicas y hardening en Active Directory y Mainframes z/OS, especialmente centrado en suplantación de identidad (impersonation), ataques de Kerberos, abuso de servicios y seguridad de sistemas mainframe.
 
 ## Contenido
 
@@ -30,10 +30,14 @@ Repositorio de referencia y ayuda rápida sobre ataques, técnicas y hardening e
 - **BloodHound-py.md**: Uso de BloodHound para análisis de AD.
 - **Lateral-nxc.md**: Movimiento lateral con NetExec.
 
+### 🖥️ Mainframe Security
+- **Mainframe-zOS-Attacks.md**: 🆕 **Guía completa de ataques a mainframes z/OS** incluyendo técnicas de red team, CVEs, hardening y parches.
+
 ## ¿Para qué sirve este repo?
 
-- Para equipos de blue team y administradores que quieran reforzar la seguridad de AD ante ataques reales y simulados.
-- Para pentesters/red teamers que necesiten consultar referencias y comandos en ataques de suplantación.
+- Para equipos de blue team y administradores que quieran reforzar la seguridad de AD y mainframes ante ataques reales y simulados.
+- Para pentesters/red teamers que necesiten consultar referencias y comandos en ataques de suplantación y sistemas mainframe.
+- Para especialistas en seguridad de mainframes z/OS que busquen técnicas de hardening y mitigación.
 
 
 ---
