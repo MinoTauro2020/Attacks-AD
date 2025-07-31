@@ -123,6 +123,62 @@ hydra -L usuarios.txt -P passwords.txt ldap://192.168.1.5
 
 ---
 
+## 🔧 Parches y actualizaciones
+
+| Parche/Update | Descripción                                                                                  |
+|---------------|----------------------------------------------------------------------------------------------|
+| **KB5025238** | Windows 11 22H2 - Mejoras en protección contra ataques de fuerza bruta LDAP.               |
+| **KB5025221** | Windows 10 22H2 - Fortalecimiento de políticas de autenticación LDAP y auditoría.          |
+| **KB5022906** | Windows Server 2022 - Mejoras en logging de conexiones LDAP y detección de anomalías.      |
+| **KB5022845** | Windows Server 2019 - Correcciones en manejo de conexiones LDAP concurrentes.              |
+| **KB4580390** | Windows Server 2016 - Parches para protección contra ataques LDAP de fuerza bruta.         |
+| **LDAP Signing Updates** | Actualizaciones para forzar firma LDAP y prevenir ataques MitM.                |
+
+### Configuraciones de registro recomendadas
+
+```powershell
+# Configurar LDAP signing obligatorio
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\NTDS\Parameters" -Name "LDAPServerIntegrity" -Value 2
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\NTDS\Parameters" -Name "RequireSignOrSeal" -Value 1
+
+# Habilitar auditoría detallada de acceso a directorio
+auditpol /set /subcategory:"Directory Service Access" /success:enable /failure:enable
+
+# Configurar límites de conexiones LDAP
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\NTDS\Parameters" -Name "MaxConnections" -Value 50
+```
+
+### Configuraciones de GPO críticas
+
+```powershell
+# Política de firmas LDAP a nivel de dominio
+# En Group Policy: Computer Configuration\Policies\Windows Settings\Security Settings\Local Policies\Security Options
+# "Domain controller: LDAP server signing requirements" = Require signing
+
+# Configurar Channel Binding para LDAP
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\NTDS\Parameters" -Name "LdapEnforceChannelBinding" -Value 2
+```
+
+### Actualizaciones críticas de seguridad
+
+- **CVE-2022-26923**: Vulnerabilidad en autenticación LDAP que permite bypass (KB5014754)
+- **CVE-2021-34470**: Bypass de políticas de autenticación LDAP (KB5005413)
+- **CVE-2020-1472**: Zerologon - impacta también conexiones LDAP (KB4556836)
+- **CVE-2019-1040**: Vulnerabilidad LDAP channel binding bypass (KB4511553)
+
+### Herramientas de monitoreo avanzadas
+
+```powershell
+# Script para detectar intentos de brute force LDAP
+$ldapEvents = Get-WinEvent -FilterHashtable @{LogName='Directory Service'; ID=2889,2887} -MaxEvents 100
+$ldapEvents | Group-Object Properties[3] | Where-Object Count -gt 10 | Select-Object Name, Count
+
+# Monitorear conexiones LDAP anómalas
+Get-Counter "\NTDS\LDAP Bind Time" -MaxSamples 10 | Where-Object {$_.CounterSamples.CookedValue -gt 1000}
+```
+
+---
+
 ## 📚 Referencias
 
 - [LDAP Brute Force Detection - SigmaHQ](https://github.com/SigmaHQ/sigma/blob/master/rules/windows/builtin/security/win_ldap_brute_force.yml)

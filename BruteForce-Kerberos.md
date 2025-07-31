@@ -124,6 +124,58 @@ cme kerberos 192.168.1.5 -u usuarios.txt -p passwords.txt
 
 ---
 
+## 🔧 Parches y actualizaciones
+
+| Parche/Update | Descripción                                                                                  |
+|---------------|----------------------------------------------------------------------------------------------|
+| **KB5025238** | Windows 11 22H2 - Mejoras en protección contra ataques de fuerza bruta Kerberos.           |
+| **KB5025221** | Windows 10 22H2 - Fortalecimiento de políticas de bloqueo de cuenta y auditoría.           |
+| **KB5022906** | Windows Server 2022 - Mejoras en detección de patrones de autenticación anómalos.          |
+| **KB5022845** | Windows Server 2019 - Correcciones en manejo de políticas de contraseñas y bloqueos.       |
+| **KB4580390** | Windows Server 2016 - Parches para mejor logging de intentos de autenticación fallidos.    |
+| **RSAT Updates** | Herramientas actualizadas para gestión de políticas de cuenta y auditoría.          |
+
+### Configuraciones de registro recomendadas
+
+```powershell
+# Configurar políticas de bloqueo de cuenta robustas
+Set-ADDefaultDomainPasswordPolicy -LockoutDuration "00:30:00" -LockoutObservationWindow "00:30:00" -LockoutThreshold 3
+
+# Habilitar auditoría detallada de autenticación
+auditpol /set /subcategory:"Kerberos Authentication Service" /success:enable /failure:enable
+auditpol /set /subcategory:"Logon" /success:enable /failure:enable
+
+# Configurar logging extendido para eventos 4625
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa" -Name "AuditBaseObjects" -Value 1
+```
+
+### Configuraciones de GPO críticas
+
+```powershell
+# Política de contraseñas robusta
+Set-ADDefaultDomainPasswordPolicy -MinPasswordLength 12 -PasswordHistoryCount 12 -MaxPasswordAge "90.00:00:00"
+
+# Configurar Smart Card authentication donde sea posible
+Set-ADUser -Identity "usuario_critico" -SmartcardLogonRequired $true
+```
+
+### Actualizaciones críticas de seguridad
+
+- **CVE-2022-37958**: Vulnerabilidad en validación de autenticación Kerberos (noviembre 2022)
+- **CVE-2021-42287**: sAMAccountName spoofing que puede facilitar bypass de bloqueos (KB5008102)
+- **CVE-2020-1472**: Zerologon - bypass completo de autenticación (KB4556836)
+- **CVE-2019-1384**: Vulnerabilidad en autenticación que permite bypass de políticas (KB4524244)
+
+### Herramientas de monitoreo mejoradas
+
+```powershell
+# Script para detectar patrones de brute force en tiempo real
+$events = Get-WinEvent -FilterHashtable @{LogName='Security'; ID=4625} -MaxEvents 100
+$events | Group-Object Properties[5] | Where-Object Count -gt 5 | Select-Object Name, Count
+```
+
+---
+
 ## 📚 Referencias
 
 - [Kerberos Password Spray Detection - SigmaHQ](https://github.com/SigmaHQ/sigma/blob/master/rules/windows/builtin/security/win_kerberos_password_spray.yml)
