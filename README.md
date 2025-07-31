@@ -15,7 +15,14 @@ Repositorio de referencia y ayuda rápida sobre ataques, técnicas y hardening e
 - **As-Rep-Roasting.md**: Detalles, detección y mitigación de AS-REP Roasting.
 - **Kerberoasting.md**: Técnica de solicitud y crackeo de tickets TGS.
 - **PassTheHash.md**: Autenticación usando hashes NTLM.
+
+#### 🎫 Ataques de Delegación Kerberos
+- **Unconstrained-Delegation.md**: Abuso de delegación no restringida y extracción de TGT.
+- **Constrained-Delegation.md**: Explotación de delegación restringida con S4U2Self/S4U2Proxy.
 - **RBCD.md**: Resource-Based Constrained Delegation abuse.
+- **S4U2Self-S4U2Proxy-Abuse.md**: Abuso de extensiones S4U y Bronze Bit attacks.
+
+#### 🔧 Otras Técnicas
 - **CVE-PrintNightmare.md**: Explotación de PrintNightmare.
 - **noPac.md**: Explotación de vulnerabilidades noPac.
 - **SmbRelay-Attack.md**: Ataques de relay SMB/NTLM.
