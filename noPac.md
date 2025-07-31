@@ -87,6 +87,152 @@ index=dc_logs (EventCode=7045 OR EventCode=5140)
 
 ---
 
+## 🛡️ Detección con Windows Defender for Endpoint
+
+### Reglas de detección personalizadas
+
+```kql
+// noPac - Detección de modificaciones sospechosas en sAMAccountName
+DeviceEvents
+| where ActionType == "LdapModify"
+| where AdditionalFields has "sAMAccountName"
+| where AdditionalFields has "$" and AdditionalFields has_any ("DC01", "DC02", "CONTROLLER")
+| project Timestamp, DeviceName, AccountName, AdditionalFields
+| order by Timestamp desc
+```
+
+```kql
+// Detección de herramientas noPac conocidas
+DeviceProcessEvents
+| where ProcessCommandLine has_any ("noPac", "sam-the-admin", "CVE-2021-42278", "CVE-2021-42287")
+| project Timestamp, DeviceName, AccountName, ProcessCommandLine, InitiatingProcessFileName
+| order by Timestamp desc
+```
+
+```kql
+// Detección de cambios rápidos en nombres de cuenta de máquina
+DeviceEvents
+| where ActionType == "UserAccountModified"
+| where AccountName endswith "$"
+| where AdditionalFields has "sAMAccountName"
+| summarize Changes = count() by AccountName, bin(Timestamp, 5m)
+| where Changes > 2
+| order by Changes desc
+```
+
+### Alertas recomendadas
+
+| Regla | Descripción | Severidad |
+|-------|-------------|-----------|
+| **Suspicious sAMAccountName Change** | Modificación sospechosa del atributo sAMAccountName | Alta |
+| **noPac Exploitation Tools** | Detección de herramientas de explotación noPac | Crítica |
+| **Rapid Account Name Changes** | Cambios rápidos en nombres de cuentas de máquina | Media |
+
+---
+
+## 🦅 Detección con CrowdStrike Falcon
+
+### Hunting queries (Event Search)
+
+```sql
+-- Detección de noPac basado en modificaciones de cuentas
+event_platform=Win event_simpleName=UserAccountModified
+| search UserName=*$ ModifiedAttribute=sAMAccountName
+| table _time, ComputerName, UserName, ModifiedAttribute, NewValue, OldValue
+| sort - _time
+```
+
+```sql
+-- Detección de herramientas noPac
+event_platform=Win event_simpleName=ProcessRollup2 
+| search (CommandLine=*noPac* OR CommandLine=*sam-the-admin* OR CommandLine=*CVE-2021-42278*)
+| table _time, ComputerName, UserName, FileName, CommandLine, SHA256HashData
+| sort - _time
+```
+
+```sql
+-- Detección de solicitudes TGT con nombres duplicados
+event_platform=Win event_simpleName=AuthActivityAuditLog
+| search ServiceName=krbtgt UserName=*$
+| bin _time span=1m
+| stats count as tgt_requests, values(UserName) as account_names by ComputerName, _time
+| where tgt_requests > 5
+| sort - tgt_requests
+```
+
+### Custom IOAs (Indicators of Attack)
+
+```sql
+-- IOA para detectar patrones noPac
+event_platform=Win event_simpleName=LdapSearch
+| search SearchFilter=*sAMAccountName* SearchFilter=*DC*
+| stats count by ComputerName, UserName, SearchFilter
+| where count > 5
+```
+
+---
+
+## 🔍 Queries KQL para Microsoft Sentinel
+
+### Detección de noPac
+
+```kql
+// Query principal para detectar explotación noPac
+SecurityEvent
+| where EventID == 4738 // User account changed
+| where TargetUserName endswith "$"
+| where TargetUserName has_any ("DC", "CONTROLLER", "DOMAIN")
+| project TimeGenerated, Computer, TargetUserName, SubjectUserName, SamAccountName
+| order by TimeGenerated desc
+```
+
+```kql
+// Correlación con herramientas de explotación
+DeviceProcessEvents
+| where ProcessCommandLine has_any ("noPac", "sam-the-admin", "CVE-2021-42278")
+| join kind=inner (
+    SecurityEvent
+    | where EventID == 4738 and TargetUserName endswith "$"
+    | project TimeGenerated, Computer, TargetUserName, SubjectUserName
+) on $left.DeviceName == $right.Computer
+| project TimeGenerated, DeviceName, ProcessCommandLine, TargetUserName
+```
+
+### Hunting avanzado
+
+```kql
+// Detección de secuencia completa noPac
+SecurityEvent
+| where EventID == 4741 // Computer account created
+| join kind=inner (
+    SecurityEvent
+    | where EventID == 4738 // Account changed
+    | where TargetUserName endswith "$"
+    | project TimeGenerated, Computer, TargetUserName, SamAccountName
+) on $left.NewTargetUserName == $right.TargetUserName
+| where TimeGenerated1 > TimeGenerated and TimeGenerated1 - TimeGenerated < 10m
+| join kind=inner (
+    SecurityEvent
+    | where EventID == 4768 // TGT requested
+    | where TargetUserName endswith "$"
+    | project TimeGenerated, Computer, TargetUserName, ServiceName
+) on $left.TargetUserName == $right.TargetUserName
+| where TimeGenerated2 > TimeGenerated1 and TimeGenerated2 - TimeGenerated1 < 5m
+| project TimeGenerated, Computer, NewTargetUserName, SamAccountName, ServiceName
+```
+
+```kql
+// Detección de tickets TGT con nombres sospechosos
+SecurityEvent
+| where EventID == 4768 // TGT requested
+| where TargetUserName endswith "$" and TargetUserName has_any ("DC", "CONTROLLER", "ADMIN")
+| where TargetUserName != Computer + "$"
+| project TimeGenerated, Computer, TargetUserName, IpAddress, ServiceName
+| order by TimeGenerated desc
+```
+
+---
+
 ## 🦾 Hardening y mitigación
 
 | Medida                                  | Descripción                                                                                      |

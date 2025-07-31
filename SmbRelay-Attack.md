@@ -221,6 +221,150 @@ graph TD
 
 ---
 
+## 🛡️ Detección con Windows Defender for Endpoint
+
+### Reglas de detección personalizadas
+
+```kql
+// SMB Relay - Detección de ataques de relay SMB/NTLM
+DeviceLogonEvents
+| where LogonType == "Network" and AuthenticationPackageName == "NTLM"
+| where RemoteIP != LocalIP
+| summarize RelayAttempts = count(), UniqueAccounts = dcount(AccountName) by RemoteIP, bin(Timestamp, 5m)
+| where RelayAttempts > 10 or UniqueAccounts > 3
+| order by RelayAttempts desc
+```
+
+```kql
+// Detección de herramientas de SMB Relay
+DeviceProcessEvents
+| where ProcessCommandLine has_any ("ntlmrelayx", "smbrelayx", "responder", "impacket", "crackmapexec") and ProcessCommandLine has "relay"
+| project Timestamp, DeviceName, AccountName, ProcessCommandLine, InitiatingProcessFileName
+| order by Timestamp desc
+```
+
+```kql
+// Detección de autenticación NTLM sin Channel Binding
+DeviceEvents
+| where ActionType == "NtlmAuthentication"
+| where AdditionalFields has "ChannelBinding" and AdditionalFields has "false"
+| project Timestamp, DeviceName, RemoteIP, AccountName, AdditionalFields
+| order by Timestamp desc
+```
+
+### Alertas recomendadas
+
+| Regla | Descripción | Severidad |
+|-------|-------------|-----------|
+| **NTLM Relay Activity** | Múltiples autenticaciones NTLM desde una IP | Alta |
+| **SMB Relay Tools** | Detección de herramientas de relay conocidas | Alta |
+| **Missing Channel Binding** | Autenticación NTLM sin Channel Binding | Media |
+
+---
+
+## 🦅 Detección con CrowdStrike Falcon
+
+### Hunting queries (Event Search)
+
+```sql
+-- Detección de SMB Relay basado en patrones de autenticación
+event_platform=Win event_simpleName=UserLogon
+| search LogonType=3 AuthenticationPackageName=NTLM
+| bin _time span=5m
+| stats dc(TargetUserName) as unique_accounts, count as total_logons by SourceIP, _time
+| where unique_accounts > 3 OR total_logons > 15
+| sort - unique_accounts
+```
+
+```sql
+-- Detección de herramientas de SMB Relay
+event_platform=Win event_simpleName=ProcessRollup2 
+| search (CommandLine=*ntlmrelayx* OR CommandLine=*smbrelayx* OR CommandLine=*responder* OR FileName=*ntlmrelayx*)
+| table _time, ComputerName, UserName, FileName, CommandLine, SHA256HashData
+| sort - _time
+```
+
+```sql
+-- Detección de tráfico SMB anómalo
+event_platform=Win event_simpleName=NetworkConnectIP4
+| search RemotePort=445 OR LocalPort=445
+| bin _time span=2m
+| stats dc(RemoteAddressIP4) as unique_connections, count as total_connections by ComputerName, UserName, _time
+| where unique_connections > 10 OR total_connections > 50
+| sort - unique_connections
+```
+
+### Custom IOAs (Indicators of Attack)
+
+```sql
+-- IOA para detectar cadenas de relay
+event_platform=Win event_simpleName=AuthActivityAuditLog
+| search LogonType=3 AuthenticationPackageName=NTLM
+| bin _time span=1m
+| stats dc(ComputerName) as relay_targets by UserName, SourceIP, _time
+| where relay_targets > 2
+```
+
+---
+
+## 🔍 Queries KQL para Microsoft Sentinel
+
+### Detección de SMB Relay
+
+```kql
+// Query principal para detectar ataques SMB Relay
+SecurityEvent
+| where EventID == 4624
+| where LogonType == 3 and AuthenticationPackageName == "NTLM"
+| where Account !endswith "$"
+| summarize LogonCount = count(), UniqueComputers = dcount(Computer) by Account, IpAddress, bin(TimeGenerated, 5m)
+| where LogonCount > 10 or UniqueComputers > 3
+| order by LogonCount desc
+```
+
+```kql
+// Correlación con herramientas de relay
+DeviceProcessEvents
+| where ProcessCommandLine has_any ("ntlmrelayx", "smbrelayx", "responder")
+| join kind=inner (
+    SecurityEvent
+    | where EventID == 4624 and LogonType == 3 and AuthenticationPackageName == "NTLM"
+    | project TimeGenerated, Computer, Account, IpAddress
+) on $left.DeviceName == $right.Computer
+| project TimeGenerated, DeviceName, ProcessCommandLine, Account, IpAddress
+```
+
+### Hunting avanzado
+
+```kql
+// Detección de relay chain (cadena de relay)
+SecurityEvent
+| where EventID == 4624 and LogonType == 3 and AuthenticationPackageName == "NTLM"
+| join kind=inner (
+    SecurityEvent
+    | where EventID == 4624 and LogonType == 3 and AuthenticationPackageName == "NTLM"
+    | project TimeGenerated, Computer, Account, IpAddress, LogonId
+) on Account
+| where Computer != Computer1 and TimeGenerated1 > TimeGenerated and TimeGenerated1 - TimeGenerated < 5m
+| project TimeGenerated, Computer, Account, IpAddress, TimeGenerated1, Computer1, IpAddress1
+```
+
+```kql
+// Detección de relay a servicios críticos
+SecurityEvent
+| where EventID == 5140 // Network share accessed
+| where ShareName in ("ADMIN$", "C$", "IPC$", "SYSVOL", "NETLOGON")
+| join kind=inner (
+    SecurityEvent
+    | where EventID == 4624 and LogonType == 3 and AuthenticationPackageName == "NTLM"
+    | project TimeGenerated, Computer, Account, IpAddress
+) on Computer, Account
+| where TimeGenerated1 > TimeGenerated and TimeGenerated1 - TimeGenerated < 2m
+| project TimeGenerated1, Computer, Account, ShareName, IpAddress
+```
+
+---
+
 ## 6️⃣ Threat Intelligence
 
 - Todas estas técnicas son TTPs de APTs, ransomware y pentesters avanzados.
