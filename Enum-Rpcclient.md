@@ -95,6 +95,79 @@ index=wineventlog (EventCode=5140)
 
 ---
 
+## 🔧 Parches y actualizaciones
+
+| Parche/Update | Descripción                                                                                  |
+|---------------|----------------------------------------------------------------------------------------------|
+| **KB5025221** | Windows 11/10 - Mejoras en protección contra enumeración RPC y limitación de acceso anónimo.|
+| **KB5022906** | Windows Server 2022 - Fortalecimiento de controles RPC y auditoría de consultas anónimas.  |
+| **KB5022845** | Windows Server 2019 - Correcciones en configuraciones RPC por defecto y acceso restringido.|
+| **KB4580390** | Windows Server 2016 - Parches críticos para limitar enumeración vía RPC y protocolos SMB.  |
+| **KB4556836** | Zerologon patch - Crítico para prevenir bypass completo de autenticación vía RPC.          |
+| **RPC Hardening Updates** | Actualizaciones específicas del subsistema RPC para mejor autenticación.          |
+
+### Configuraciones de registro críticas
+
+```powershell
+# Restringir acceso RPC anónimo
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa" -Name "RestrictAnonymous" -Value 2
+
+# Configurar autenticación RPC obligatoria
+Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Rpc\ClientProtocols" -Name "AuthnLevel" -Value 6
+
+# Limitar interfaces RPC expuestas
+Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Rpc\SecurityService" -Name "DefaultAuthLevel" -Value 6
+
+# Auditoría de acceso RPC
+auditpol /set /subcategory:"RPC Events" /success:enable /failure:enable
+```
+
+### Configuraciones de GPO críticas
+
+```powershell
+# Configurar políticas RPC restrictivas
+# Computer Configuration\Policies\Windows Settings\Security Settings\Local Policies\Security Options:
+# "Network access: Restrict clients allowed to make remote calls to SAM" = Configurar lista restrictiva
+# "Network access: Do not allow anonymous enumeration of SAM accounts" = Enabled
+
+# Configurar firewall para RPC
+New-NetFirewallRule -DisplayName "Block RPC Anonymous" -Direction Inbound -Protocol TCP -LocalPort 135 -Action Block -RemoteAddress "Any"
+```
+
+### Scripts de validación y detección
+
+```powershell
+# Verificar configuraciones RPC
+$restrictRPC = Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa" -Name "RestrictAnonymous" -ErrorAction SilentlyContinue
+if ($restrictRPC.RestrictAnonymous -eq 2) {
+    Write-Host "✓ Acceso RPC anónimo restringido" -ForegroundColor Green
+} else {
+    Write-Host "✗ RESTRINGIR acceso RPC anónimo" -ForegroundColor Red
+}
+
+# Detectar conexiones RPC sospechosas
+$rpcConnections = Get-NetTCPConnection | Where-Object {$_.LocalPort -eq 135 -and $_.State -eq "Established"}
+$rpcConnections | Group-Object RemoteAddress | Where-Object Count -gt 5 |
+ForEach-Object {
+    Write-Warning "Múltiples conexiones RPC desde: $($_.Name) - $($_.Count) conexiones"
+}
+
+# Monitorear procesos rpcclient o similares
+Get-Process | Where-Object {$_.ProcessName -match "(rpcclient|net|wmic)"} |
+ForEach-Object {
+    Write-Warning "Herramienta de enumeración RPC detectada: $($_.ProcessName) PID:$($_.Id)"
+}
+```
+
+### Actualizaciones críticas de seguridad
+
+- **CVE-2020-1472**: Zerologon - bypass crítico de autenticación vía RPC (KB4556836)
+- **CVE-2017-0143**: EternalBlue - afecta también protocolos RPC/SMB (KB4013389)
+- **CVE-2019-1040**: LDAP/RPC relay attack bypass (KB4511553)
+- **CVE-2021-36942**: Vulnerabilidades RPC que facilitan coerción (KB5005413)
+
+---
+
 ## 📚 Referencias
 
 - [rpcclient - Samba suite](https://www.samba.org/samba/docs/current/man-html/rpcclient.1.html)

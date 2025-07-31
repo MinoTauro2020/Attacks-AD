@@ -135,6 +135,92 @@ index=dc_logs (EventCode=4768 OR EventCode=4769 OR EventCode=4662 OR EventCode=5
 
 ---
 
+## 🔧 Parches y actualizaciones
+
+| Parche/Update | Descripción                                                                                  |
+|---------------|----------------------------------------------------------------------------------------------|
+| **KB5025238** | Windows 11/10 - Mejoras en protección de consultas LDAP y limitación de enumeración.       |
+| **KB5022906** | Windows Server 2022 - Fortalecimiento de controles de acceso LDAP y auditoría mejorada.    |
+| **KB5022845** | Windows Server 2019 - Correcciones en permisos por defecto y limitación de acceso anónimo. |
+| **KB4580390** | Windows Server 2016 - Parches para restringir enumeración vía LDAP y protocolos RPC.       |
+| **KB5005413** | Todas las versiones - Mejoras en Channel Binding LDAP para prevenir enumeración.           |
+| **LDAP Hardening Updates** | Actualizaciones específicas para limitar consultas de enumeración masiva.        |
+
+### Configuraciones de registro críticas
+
+```powershell
+# Limitar consultas LDAP anónimas
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\NTDS\Parameters" -Name "LDAPServerIntegrity" -Value 2
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\NTDS\Parameters" -Name "DsHeuristics" -Value "001000001"
+
+# Configurar auditoría detallada de acceso al directorio
+auditpol /set /subcategory:"Directory Service Access" /success:enable /failure:enable
+
+# Limitar tamaño de respuestas LDAP (anti-enumeración)
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\NTDS\Parameters" -Name "MaxPageSize" -Value 100
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\NTDS\Parameters" -Name "MaxQueryDuration" -Value 300
+```
+
+### Configuraciones de GPO críticas
+
+```powershell
+# Configurar permisos restrictivos en AD
+# Computer Configuration\Policies\Windows Settings\Security Settings\Local Policies\Security Options:
+# "Network access: Allow anonymous SID/Name translation" = Disabled
+# "Network access: Do not allow anonymous enumeration of SAM accounts" = Enabled
+
+# Configurar políticas de acceso al directorio
+# Remove "Everyone" from "Pre-Windows 2000 Compatible Access" group
+Get-ADGroup "Pre-Windows 2000 Compatible Access" | Set-ADGroup -Clear member
+```
+
+### Scripts de validación y detección
+
+```powershell
+# Verificar configuraciones anti-enumeración
+$ldapIntegrity = Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\NTDS\Parameters" -Name "LDAPServerIntegrity" -ErrorAction SilentlyContinue
+if ($ldapIntegrity.LDAPServerIntegrity -eq 2) {
+    Write-Host "✓ LDAP Server Integrity configurado" -ForegroundColor Green
+} else {
+    Write-Host "✗ CONFIGURAR LDAP Server Integrity" -ForegroundColor Red
+}
+
+# Detectar consultas LDAP masivas (tipo BloodHound)
+$ldapEvents = Get-WinEvent -FilterHashtable @{LogName='Directory Service'; ID=1644,1645} -MaxEvents 100 -ErrorAction SilentlyContinue
+$ldapEvents | Group-Object Properties[1] | Where-Object Count -gt 50 | 
+ForEach-Object {
+    Write-Warning "Enumeración masiva detectada desde: $($_.Name) - $($_.Count) consultas"
+}
+
+# Monitorear conexiones LDAP sospechosas
+Get-NetTCPConnection | Where-Object {$_.LocalPort -eq 389 -or $_.LocalPort -eq 636} |
+Group-Object RemoteAddress | Where-Object Count -gt 10 |
+Select-Object Name, Count | Sort-Object Count -Descending
+```
+
+### Configuraciones defensivas específicas
+
+```powershell
+# Crear GPO para limitar herramientas de enumeración
+# Computer Configuration\Policies\Administrative Templates\System:
+# "Prevent access to the command prompt" = Enabled (for standard users)
+
+# Configurar Windows Defender para detectar BloodHound
+Add-MpPreference -AttackSurfaceReductionRules_Ids "e6db77e5-3df2-4cf1-b95a-636979351e5b" -AttackSurfaceReductionRules_Actions Enabled
+
+# Implementar honeypots para detectar enumeración
+New-ADUser -Name "HoneyPot_Admin" -Enabled $false -Description "Cuenta trampa para detectar enumeración"
+```
+
+### Actualizaciones críticas relacionadas
+
+- **CVE-2022-26923**: Vulnerabilidad en certificados que facilita enumeración privilegiada (KB5014754)
+- **CVE-2021-42278**: Spoofing que puede ser usado junto con enumeración (KB5008102)
+- **CVE-2019-1040**: LDAP Channel Binding bypass usado en enumeración (KB4511553)
+- **CVE-2020-1472**: Zerologon que facilita acceso para enumeración completa (KB4556836)
+
+---
+
 ## 📚 Referencias
 
 - [BloodHound.py - GitHub](https://github.com/dirkjanm/BloodHound.py)

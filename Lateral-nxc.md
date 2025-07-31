@@ -115,6 +115,111 @@ index=dc_logs (EventCode=4776 OR EventCode=4624 OR EventCode=5140 OR EventCode=5
 
 ---
 
+## 🔧 Parches y actualizaciones
+
+| Parche/Update | Descripción                                                                                  |
+|---------------|----------------------------------------------------------------------------------------------|
+| **KB5025221** | Windows 11/10 - Mejoras en protección contra movimiento lateral vía SMB/WMI/PSExec.        |
+| **KB5022906** | Windows Server 2022 - Fortalecimiento de servicios remotos y autenticación administrativa. |
+| **KB5022845** | Windows Server 2019 - Correcciones en manejo de credenciales para servicios remotos.       |
+| **KB4580390** | Windows Server 2016 - Parches para protección contra escalada via servicios administrativos.|
+| **KB4556836** | Zerologon patch - Crítico para prevenir movimiento lateral post-compromiso inicial.        |
+| **Administrative Tools Updates** | Actualizaciones de herramientas administrativas para mejor seguridad.    |
+
+### Configuraciones de registro críticas
+
+```powershell
+# Configurar Credential Guard
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\DeviceGuard" -Name "EnableVirtualizationBasedSecurity" -Value 1
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\DeviceGuard" -Name "LsaCfgFlags" -Value 1
+
+# Habilitar LSA Protection
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa" -Name "RunAsPPL" -Value 1
+
+# Configurar WDigest para no almacenar credenciales en texto plano
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\WDigest" -Name "UseLogonCredential" -Value 0
+
+# Restricciones de servicios remotos
+Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" -Name "LocalAccountTokenFilterPolicy" -Value 0
+```
+
+### Configuraciones de GPO críticas
+
+```powershell
+# Configurar políticas de Privileged Access Workstations
+# Computer Configuration\Policies\Administrative Templates\System\Credentials Delegation:
+# "Allow delegating default credentials" = Disabled
+# "Allow delegating default credentials with NTLM-only server authentication" = Disabled
+
+# Configurar restricciones de servicios administrativos
+# Computer Configuration\Policies\Windows Settings\Security Settings\Local Policies\User Rights Assignment:
+# "Log on as a service" = Solo cuentas específicas de servicio
+# "Act as part of the operating system" = Solo SYSTEM
+```
+
+### Scripts de validación y detección
+
+```powershell
+# Verificar Credential Guard
+$credGuard = Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\DeviceGuard" -Name "LsaCfgFlags" -ErrorAction SilentlyContinue
+if ($credGuard.LsaCfgFlags -eq 1) {
+    Write-Host "✓ Credential Guard habilitado" -ForegroundColor Green
+} else {
+    Write-Host "✗ HABILITAR Credential Guard" -ForegroundColor Red
+}
+
+# Verificar LSA Protection
+$lsaPPL = Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa" -Name "RunAsPPL" -ErrorAction SilentlyContinue
+if ($lsaPPL.RunAsPPL -eq 1) {
+    Write-Host "✓ LSA Protection habilitado" -ForegroundColor Green
+} else {
+    Write-Host "✗ HABILITAR LSA Protection" -ForegroundColor Red
+}
+
+# Detectar herramientas de movimiento lateral
+Get-Process | Where-Object {$_.ProcessName -match "(psexec|wmiexec|crackmapexec|nxc|winrs)"} |
+ForEach-Object {
+    Write-Warning "Herramienta de movimiento lateral detectada: $($_.ProcessName) PID:$($_.Id)"
+}
+
+# Monitorear conexiones administrativas sospechosas
+$adminConnections = Get-NetTCPConnection | Where-Object {$_.LocalPort -in @(445,135,5985,5986) -and $_.State -eq "Established"}
+$adminConnections | Group-Object RemoteAddress | Where-Object Count -gt 3 |
+ForEach-Object {
+    Write-Warning "Múltiples conexiones administrativas desde: $($_.Name) - $($_.Count) conexiones"
+}
+```
+
+### Scripts de respuesta a incidentes
+
+```powershell
+# Script para resetear credenciales comprometidas
+function Reset-CompromisedCredentials {
+    param($ComputerName)
+    
+    # Resetear contraseña de cuenta de máquina
+    Reset-ComputerMachinePassword -Credential (Get-Credential) -Server $ComputerName
+    
+    # Limpiar tickets Kerberos
+    Invoke-Command -ComputerName $ComputerName -ScriptBlock {klist purge}
+    
+    # Reiniciar servicios críticos
+    Invoke-Command -ComputerName $ComputerName -ScriptBlock {
+        Restart-Service -Name "Netlogon" -Force
+        Restart-Service -Name "LanmanServer" -Force
+    }
+}
+```
+
+### Actualizaciones críticas de seguridad
+
+- **CVE-2020-1472**: Zerologon - facilita movimiento lateral masivo (KB4556836)
+- **CVE-2021-36934**: HiveNightmare - acceso a credenciales locales (KB5005101)
+- **CVE-2022-26925**: LSA spoofing que facilita movimiento lateral (KB5014754)
+- **CVE-2019-1384**: Escalada de privilegios que puede usarse en movimiento lateral (KB4524244)
+
+---
+
 ## 📚 Referencias
 
 - [CrackMapExec](https://github.com/Porchetta-Industries/CrackMapExec)
