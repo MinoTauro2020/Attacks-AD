@@ -229,6 +229,98 @@ graph TD
 
 ---
 
+## 🔧 Parches y actualizaciones
+
+| Parche/Update | Descripción                                                                                  |
+|---------------|----------------------------------------------------------------------------------------------|
+| **KB5025221** | Windows 11/10 - Mejoras en SMB signing y protección contra relay attacks.                  |
+| **KB5022906** | Windows Server 2022 - Fortalecimiento de validaciones SMB y prevención de relay.           |
+| **KB5022845** | Windows Server 2019 - Correcciones en manejo de autenticación SMB y Channel Binding.       |
+| **KB4580390** | Windows Server 2016 - Parches críticos para SMB signing y mitigación de relay attacks.     |
+| **KB5005413** | Todas las versiones - Mejoras en LDAP Channel Binding para prevenir relay a LDAP.          |
+| **SMB Protocol Updates** | Actualizaciones del protocolo SMB para mejor seguridad en autenticación.        |
+
+### Configuraciones de registro críticas
+
+```powershell
+# Forzar SMB signing en todo el dominio
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters" -Name "RequireSecuritySignature" -Value 1
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters" -Name "RequireSecuritySignature" -Value 1
+
+# Habilitar LDAP Channel Binding
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\NTDS\Parameters" -Name "LdapEnforceChannelBinding" -Value 2
+
+# Configurar EPA (Extended Protection for Authentication)
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\LSA" -Name "SuppressExtendedProtection" -Value 0
+```
+
+### Configuraciones de GPO críticas
+
+```powershell
+# Configurar SMB signing via GPO
+# Computer Configuration\Policies\Windows Settings\Security Settings\Local Policies\Security Options:
+# "Microsoft network client: Digitally sign communications (always)" = Enabled
+# "Microsoft network server: Digitally sign communications (always)" = Enabled
+
+# Configurar políticas de autenticación
+# "Network security: Restrict NTLM: Outgoing NTLM traffic to remote servers" = Deny all
+```
+
+### Scripts de validación post-parche
+
+```powershell
+# Verificar SMB signing en todos los sistemas
+$computers = Get-ADComputer -Filter * | Select-Object -ExpandProperty Name
+foreach ($computer in $computers) {
+    try {
+        $reg = [Microsoft.Win32.RegistryKey]::OpenRemoteBaseKey('LocalMachine', $computer)
+        $key = $reg.OpenSubKey('SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters')
+        $smb = $key.GetValue('RequireSecuritySignature')
+        if ($smb -eq 1) {
+            Write-Host "✓ $computer: SMB signing habilitado" -ForegroundColor Green
+        } else {
+            Write-Host "✗ $computer: SMB signing DESHABILITADO" -ForegroundColor Red
+        }
+    } catch {
+        Write-Host "? $computer: No accesible" -ForegroundColor Yellow
+    }
+}
+
+# Verificar LDAP Channel Binding
+$ldapBinding = Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\NTDS\Parameters" -Name "LdapEnforceChannelBinding" -ErrorAction SilentlyContinue
+if ($ldapBinding.LdapEnforceChannelBinding -eq 2) {
+    Write-Host "✓ LDAP Channel Binding configurado correctamente" -ForegroundColor Green
+} else {
+    Write-Host "✗ CONFIGURAR LDAP Channel Binding" -ForegroundColor Red
+}
+```
+
+### Actualizaciones críticas de seguridad
+
+- **CVE-2022-26923**: Vulnerabilidad en certificados AD que facilita relay attacks (KB5014754)
+- **CVE-2021-36942**: ADCS escalada de privilegios via relay (KB5005413)
+- **CVE-2019-1040**: LDAP Channel Binding bypass (KB4511553)
+- **CVE-2019-1019**: SMB relay vulnerability en autenticación (KB4499164)
+
+### Herramientas de detección específicas
+
+```powershell
+# Script para detectar intentos de SMB relay
+$smbEvents = Get-WinEvent -FilterHashtable @{LogName='System'; ID=3000,3004} -MaxEvents 100
+$smbEvents | Where-Object {$_.Message -like "*authentication*" -and $_.Message -like "*failed*"} |
+ForEach-Object {
+    Write-Warning "Posible SMB relay detectado: $($_.TimeCreated) - $($_.Message.Substring(0,100))"
+}
+
+# Monitorear autenticaciones NTLM sospechosas
+Get-WinEvent -FilterHashtable @{LogName='Security'; ID=4624} | 
+Where-Object {$_.Properties[8] -eq 3 -and $_.Properties[10] -eq "NTLM"} |
+Group-Object Properties[6] | Where-Object Count -gt 10 |
+Select-Object Name, Count
+```
+
+---
+
 ## 7️⃣ Referencias y herramientas
 
 - [Impacket](https://github.com/fortra/impacket)

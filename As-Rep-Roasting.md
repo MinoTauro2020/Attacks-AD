@@ -136,6 +136,35 @@ index=dc_logs sourcetype=WinEventLog:Security EventCode=4768 Pre_Authentication_
 
 ---
 
+## 🔧 Parches y actualizaciones
+
+| Parche/Update | Descripción                                                                                  |
+|---------------|----------------------------------------------------------------------------------------------|
+| **KB5025238** | Windows 11 22H2 - Mejoras en seguridad Kerberos y protección contra AS-REP Roasting.        |
+| **KB5025239** | Windows 10 21H2/22H2 - Fortalecimiento de validaciones de preautenticación Kerberos.        |
+| **KB5022906** | Windows Server 2022 - Auditoría mejorada de eventos 4768 con más metadatos de seguridad.     |
+| **KB5022845** | Windows Server 2019 - Correcciones en el manejo de políticas de preautenticación.            |
+| **Windows Server 2016** | KB4580390 - Mejoras en logging de eventos Kerberos para mejor detección.          |
+| **RSAT** | Herramientas de administración remota actualizadas para gestión de políticas Kerberos. |
+
+### Configuraciones de registro recomendadas
+
+```powershell
+# Habilitar auditoría detallada de autenticación Kerberos
+auditpol /set /subcategory:"Kerberos Authentication Service" /success:enable /failure:enable
+
+# Configurar políticas de grupo para preautenticación obligatoria
+Set-ADDefaultDomainPasswordPolicy -Identity "Default Domain Policy" -ComplexityEnabled $true
+```
+
+### Actualizaciones críticas de seguridad
+
+- **CVE-2022-37958**: Vulnerabilidad en validación de tickets AS-REP (parcheada en actualizaciones de noviembre 2022)
+- **CVE-2021-42287**: sAMAccountName spoofing que puede facilitar AS-REP Roasting (KB5008102)
+- **CVE-2021-42278**: Bypass de validaciones de nombre de cuenta (KB5008102)
+
+---
+
 ## 🧑‍💻 ¿Cómo revisar o identificar la preautenticación de una cuenta?
 
 ```powershell

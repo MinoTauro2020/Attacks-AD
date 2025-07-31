@@ -134,6 +134,99 @@ python3 /usr/share/doc/python3-impacket/examples/GetADUsers.py essos.local/usuar
 
 ---
 
+## 🔧 Parches y actualizaciones
+
+| Parche/Update | Descripción                                                                                  |
+|---------------|----------------------------------------------------------------------------------------------|
+| **KB5025238** | Windows 11/10 - Mejoras en protección contra enumeración de usuarios vía múltiples métodos.|
+| **KB5022906** | Windows Server 2022 - Fortalecimiento de controles de acceso para consultas de usuarios.   |
+| **KB5022845** | Windows Server 2019 - Correcciones en permisos por defecto y limitación de acceso anónimo. |
+| **KB4580390** | Windows Server 2016 - Parches para restringir enumeración vía SMB, RPC y LDAP.             |
+| **KB5005413** | Todas las versiones - Mejoras en autenticación para prevenir enumeración no autorizada.    |
+| **Anonymous Access Updates** | Actualizaciones para limitar acceso anónimo y enumeración de usuarios.        |
+
+### Configuraciones de registro críticas
+
+```powershell
+# Restringir enumeración anónima de usuarios
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa" -Name "RestrictAnonymous" -Value 2
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa" -Name "RestrictAnonymousSAM" -Value 1
+
+# Limitar consultas RPC anónimas
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa" -Name "EveryoneIncludesAnonymous" -Value 0
+
+# Configurar auditoría de enumeración
+auditpol /set /subcategory:"Other Account Logon Events" /success:enable /failure:enable
+auditpol /set /subcategory:"Directory Service Access" /success:enable /failure:enable
+```
+
+### Configuraciones de GPO críticas
+
+```powershell
+# Configurar políticas anti-enumeración
+# Computer Configuration\Policies\Windows Settings\Security Settings\Local Policies\Security Options:
+# "Network access: Do not allow anonymous enumeration of SAM accounts" = Enabled
+# "Network access: Do not allow anonymous enumeration of SAM accounts and shares" = Enabled
+# "Network access: Restrict anonymous access to Named Pipes and Shares" = Enabled
+
+# Configurar permisos restrictivos
+Remove-ADGroupMember -Identity "Pre-Windows 2000 Compatible Access" -Members "Everyone" -Confirm:$false
+```
+
+### Scripts de validación post-configuración
+
+```powershell
+# Verificar configuraciones anti-enumeración
+$restrictAnon = Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa" -Name "RestrictAnonymous" -ErrorAction SilentlyContinue
+if ($restrictAnon.RestrictAnonymous -eq 2) {
+    Write-Host "✓ RestrictAnonymous configurado correctamente" -ForegroundColor Green
+} else {
+    Write-Host "✗ CONFIGURAR RestrictAnonymous = 2" -ForegroundColor Red
+}
+
+# Verificar permisos del grupo Pre-Windows 2000 Compatible Access
+$preW2kGroup = Get-ADGroupMember "Pre-Windows 2000 Compatible Access" | Where-Object {$_.Name -eq "Everyone"}
+if (-not $preW2kGroup) {
+    Write-Host "✓ Everyone removido de Pre-Windows 2000 Compatible Access" -ForegroundColor Green
+} else {
+    Write-Host "✗ REMOVER Everyone de Pre-Windows 2000 Compatible Access" -ForegroundColor Red
+}
+
+# Detectar intentos de enumeración
+$enumEvents = Get-WinEvent -FilterHashtable @{LogName='Security'; ID=4798,4799} -MaxEvents 50 -ErrorAction SilentlyContinue
+$enumEvents | Group-Object Properties[1] | Where-Object Count -gt 10 |
+ForEach-Object {
+    Write-Warning "Enumeración de usuarios detectada desde: $($_.Name) - $($_.Count) intentos"
+}
+```
+
+### Scripts de detección específicos
+
+```powershell
+# Monitorear consultas LDAP de enumeración masiva
+$ldapEvents = Get-WinEvent -FilterHashtable @{LogName='Directory Service'; ID=1644} -MaxEvents 100 -ErrorAction SilentlyContinue
+$ldapEvents | Where-Object {$_.Message -like "*objectClass=user*"} |
+Group-Object Properties[3] | Where-Object Count -gt 20 |
+ForEach-Object {
+    Write-Warning "Enumeración masiva de usuarios via LDAP: IP $($_.Name) - $($_.Count) consultas"
+}
+
+# Detectar herramientas de enumeración comunes
+Get-Process | Where-Object {$_.ProcessName -match "(enum4linux|rpcclient|ldapsearch|net\.exe)"} |
+ForEach-Object {
+    Write-Warning "Herramienta de enumeración detectada: $($_.ProcessName) PID:$($_.Id)"
+}
+```
+
+### Actualizaciones críticas relacionadas
+
+- **CVE-2022-26923**: Vulnerabilidad que puede facilitar enumeración privilegiada (KB5014754)
+- **CVE-2021-42278**: Spoofing que combinado con enumeración puede ser crítico (KB5008102)
+- **CVE-2019-1040**: Bypass que facilita enumeración no autorizada (KB4511553)
+- **CVE-2020-1472**: Zerologon que permite enumeración completa post-explotación (KB4556836)
+
+---
+
 ## 📚 Referencias
 
 - [User Enumeration in AD - HackTricks](https://book.hacktricks.xyz/windows-hardening/active-directory-methodology/domain-user-enumeration)

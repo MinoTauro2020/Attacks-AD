@@ -114,6 +114,87 @@ index=dc_logs (EventCode=7045 OR EventCode=5140)
 
 ---
 
+## 🔧 Parches y actualizaciones
+
+| Parche/Update | Descripción                                                                                  |
+|---------------|----------------------------------------------------------------------------------------------|
+| **KB5008102** | Windows 11/10/Server - Parche CRÍTICO para CVE-2021-42278/42287 (noPac exploit principal). |
+| **KB5007247** | Windows Server 2022 - Correcciones adicionales para validaciones de sAMAccountName.        |
+| **KB5007206** | Windows Server 2019 - Fortalecimiento de validaciones KDC contra spoofing de nombres.      |
+| **KB5007192** | Windows Server 2016 - Parches esenciales para prevenir escalada de privilegios noPac.      |
+| **KB5007205** | Windows Server 2012 R2 - Correcciones críticas de seguridad para dominios legacy.         |
+| **Domain/Forest Level** | Actualizar niveles funcionales para mejores validaciones de seguridad.        |
+
+### Configuraciones de registro críticas post-parche
+
+```powershell
+# Habilitar auditoría detallada de cambios en cuentas de equipo
+auditpol /set /subcategory:"Computer Account Management" /success:enable /failure:enable
+auditpol /set /subcategory:"Kerberos Authentication Service" /success:enable /failure:enable
+
+# Configurar logging extendido para cambios de atributos críticos
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa" -Name "AuditSpecialGroups" -Value 1
+
+# Validación de nombres de cuenta reforzada
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\NTDS\Parameters" -Name "StrictSAMAccountNameValidation" -Value 1
+```
+
+### Validación crítica post-parche
+
+```powershell
+# Script para verificar que el parche principal esté aplicado
+$noPacPatch = Get-HotFix -Id "KB5008102" -ErrorAction SilentlyContinue
+if ($noPacPatch) {
+    Write-Host "✓ KB5008102 (noPac fix) aplicado el: $($noPacPatch.InstalledOn)" -ForegroundColor Green
+} else {
+    Write-Host "✗ CRÍTICO: KB5008102 NO aplicado - Sistema vulnerable a noPac" -ForegroundColor Red
+}
+
+# Verificar configuraciones de validación
+$validation = Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\NTDS\Parameters" -Name "StrictSAMAccountNameValidation" -ErrorAction SilentlyContinue
+if ($validation.StrictSAMAccountNameValidation -eq 1) {
+    Write-Host "✓ Validación de nombres SAM configurada correctamente" -ForegroundColor Green
+} else {
+    Write-Host "⚠ Configurar validación estricta de nombres SAM" -ForegroundColor Yellow
+}
+```
+
+### Configuraciones de GPO recomendadas
+
+```powershell
+# Restringir privilegios de modificación de cuentas de equipo
+# Computer Configuration\Policies\Windows Settings\Security Settings\Local Policies\User Rights Assignment
+# "Add workstations to domain" - Solo administradores específicos
+
+# Configurar políticas de nombres de equipo más restrictivas
+Set-ADDefaultDomainPasswordPolicy -Identity "Default Domain Policy" -ComplexityEnabled $true
+```
+
+### Actualizaciones críticas relacionadas
+
+- **CVE-2021-42278**: sAMAccountName spoofing (noPac principal) - KB5008102
+- **CVE-2021-42287**: KDC bypass de validaciones - KB5008102
+- **CVE-2022-26923**: Certificados AD relacionados con autenticación de máquinas - KB5014754
+- **CVE-2020-17049**: Vulnerabilidad Kerberos KDC - KB4586876
+
+### Herramientas de detección específicas para noPac
+
+```powershell
+# Script para detectar intentos de noPac en tiempo real
+$events = Get-WinEvent -FilterHashtable @{LogName='Security'; ID=4742,4743} -MaxEvents 50
+$events | Where-Object {$_.Message -like "*sAMAccountName*" -and $_.Message -like "*$*"} | 
+ForEach-Object {
+    Write-Warning "Posible intento noPac detectado: $($_.TimeCreated) - $($_.Message.Substring(0,100))"
+}
+
+# Monitorear cambios en cuentas de equipo con nombres sospechosos
+Get-ADComputer -Filter "Name -like '*$*'" -Properties whenChanged | 
+Where-Object {$_.whenChanged -gt (Get-Date).AddHours(-24)} |
+Select-Object Name, whenChanged, DistinguishedName
+```
+
+---
+
 ## 📚 Referencias
 
 - [noPac - HackTricks](https://book.hacktricks.xyz/windows-hardening/active-directory-methodology/privilege-escalation/nopac)

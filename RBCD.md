@@ -168,6 +168,80 @@ Get-ACL "AD:\CN=posterior,OU=Equipos,DC=dominio,DC=local" | Format-List
 
 ---
 
+## 🔧 Parches y actualizaciones
+
+| Parche/Update | Descripción                                                                                  |
+|---------------|----------------------------------------------------------------------------------------------|
+| **KB5008102** | Windows 11/10/Server - Parche crítico para CVE-2021-42278/42287 (sAMAccountName spoofing). |
+| **KB5025238** | Windows 11 22H2 - Mejoras en validación de delegación Kerberos y prevención RBCD abuse.    |
+| **KB5022906** | Windows Server 2022 - Fortalecimiento de controles de delegación restringida.              |
+| **KB5022845** | Windows Server 2019 - Correcciones en manejo de atributos msDS-AllowedToActOnBehalfOfOtherIdentity. |
+| **KB4580390** | Windows Server 2016 - Mejoras en auditoría de cambios de delegación y permisos.            |
+| **Schema Updates** | Actualizaciones de esquema AD para mejores controles de delegación.                  |
+
+### Configuraciones de registro recomendadas
+
+```powershell
+# Habilitar auditoría detallada de cambios en delegación
+auditpol /set /subcategory:"User Account Management" /success:enable /failure:enable
+auditpol /set /subcategory:"Computer Account Management" /success:enable /failure:enable
+
+# Configurar logging extendido para cambios en msDS-AllowedToActOnBehalfOfOtherIdentity
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa" -Name "AuditSpecialGroups" -Value 1
+```
+
+### Configuraciones de GPO críticas
+
+```powershell
+# Restringir quién puede modificar atributos de delegación
+# Computer Configuration\Policies\Windows Settings\Security Settings\Local Policies\User Rights Assignment
+# "Enable computer and user accounts to be trusted for delegation" - Solo administradores específicos
+
+# Configurar políticas de nombres de equipo
+Set-ADDefaultDomainPasswordPolicy -Identity "Default Domain Policy" -ComplexityEnabled $true
+```
+
+### Scripts de validación post-parche
+
+```powershell
+# Verificar que los parches críticos estén aplicados
+$criticalKBs = @("KB5008102", "KB5025238", "KB5022906")
+foreach ($kb in $criticalKBs) {
+    $patch = Get-HotFix -Id $kb -ErrorAction SilentlyContinue
+    if ($patch) {
+        Write-Host "✓ $kb aplicado correctamente" -ForegroundColor Green
+    } else {
+        Write-Host "✗ CRÍTICO: $kb NO aplicado" -ForegroundColor Red
+    }
+}
+
+# Auditar configuraciones de delegación actuales
+Get-ADComputer -Filter * -Properties msDS-AllowedToActOnBehalfOfOtherIdentity | 
+Where-Object {$_."msDS-AllowedToActOnBehalfOfOtherIdentity" -ne $null} |
+Select-Object Name, DistinguishedName
+```
+
+### Actualizaciones críticas de seguridad
+
+- **CVE-2021-42278**: sAMAccountName spoofing que facilita RBCD abuse (KB5008102)
+- **CVE-2021-42287**: KDC bypass de validaciones de nombre (KB5008102)  
+- **CVE-2022-26923**: Vulnerabilidad en certificados AD que puede combinarse con RBCD (KB5014754)
+- **CVE-2020-17049**: Vulnerabilidad Kerberos KDC relacionada con delegación (KB4586876)
+
+### Herramientas de detección mejoradas
+
+```powershell
+# Script para monitorear cambios en delegación en tiempo real
+Register-ObjectEvent -InputObject (Get-WmiObject -Query "SELECT * FROM Win32_NTLogEvent WHERE LogFile='Security' AND EventCode=4742") -EventName "EventArrived" -Action {
+    $event = $Event.SourceEventArgs.NewEvent
+    if ($event.Message -like "*msDS-AllowedToActOnBehalfOfOtherIdentity*") {
+        Write-Warning "Cambio detectado en delegación RBCD: $($event.Message)"
+    }
+}
+```
+
+---
+
 ## 📚 Referencias
 
 - [Ataques RBCD - HackTricks](https://book.hacktricks.xyz/windows-hardening/active-directory-methodology/resource-based-constrained-delegation-rbcd)

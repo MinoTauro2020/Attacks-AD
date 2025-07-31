@@ -219,6 +219,99 @@ Get-NetFirewallRule | Where-Object { $_.LocalPort -eq 445 -or $_.LocalPort -eq 1
 
 ---
 
+## 🔧 Parches y actualizaciones
+
+| Parche/Update | Descripción                                                                                  |
+|---------------|----------------------------------------------------------------------------------------------|
+| **KB5005413** | Windows 11/10/Server - Parche crítico para PetitPotam y ataques de coerción via EFSRPC.    |
+| **KB5004946** | Windows Server 2016/2019 - Mitigación de ataques de coerción via PrinterBug y similares.   |
+| **KB5005010** | Windows Server 2022 - Mejoras en protección contra coerción via múltiples protocolos RPC.  |
+| **KB5022845** | Todas las versiones - Fortalecimiento de validaciones RPC y prevención de coerción.        |
+| **KB5025221** | Actualizaciones más recientes - Mejoras en Channel Binding y protección EPA.               |
+| **RPC Security Updates** | Actualizaciones del subsistema RPC para mejor autenticación y validación.       |
+
+### Configuraciones de registro críticas
+
+```powershell
+# Deshabilitar EFS RPC (PetitPotam mitigation)
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\EFS" -Name "Start" -Value 4
+
+# Configurar EPA (Extended Protection for Authentication)
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\LSA" -Name "SuppressExtendedProtection" -Value 0
+
+# Habilitar LDAP Channel Binding (crucial contra coerción)
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\NTDS\Parameters" -Name "LdapEnforceChannelBinding" -Value 2
+
+# Configurar RPC authentication level
+Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Rpc\ClientProtocols" -Name "AuthnLevel" -Value 6
+```
+
+### Configuraciones de GPO críticas
+
+```powershell
+# Deshabilitar servicios RPC vulnerables via GPO
+# Computer Configuration\Policies\Windows Settings\Security Settings\System Services:
+# "Encrypting File System (EFS)" = Disabled
+# "Print Spooler" = Disabled (donde no sea necesario)
+
+# Configurar autenticación RPC
+# Computer Configuration\Policies\Windows Settings\Security Settings\Local Policies\Security Options:
+# "Network security: Restrict NTLM: Outgoing NTLM traffic to remote servers" = Deny all
+```
+
+### Scripts de validación post-parche
+
+```powershell
+# Verificar que EFS esté deshabilitado
+$efsService = Get-Service -Name "EFS" -ErrorAction SilentlyContinue
+if ($efsService.StartType -eq "Disabled") {
+    Write-Host "✓ EFS Service deshabilitado correctamente" -ForegroundColor Green
+} else {
+    Write-Host "✗ DESHABILITAR EFS Service para prevenir PetitPotam" -ForegroundColor Red
+}
+
+# Verificar LDAP Channel Binding
+$ldapBinding = Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\NTDS\Parameters" -Name "LdapEnforceChannelBinding" -ErrorAction SilentlyContinue
+if ($ldapBinding.LdapEnforceChannelBinding -eq 2) {
+    Write-Host "✓ LDAP Channel Binding configurado" -ForegroundColor Green
+} else {
+    Write-Host "✗ CONFIGURAR LDAP Channel Binding" -ForegroundColor Red
+}
+
+# Verificar EPA
+$epa = Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\LSA" -Name "SuppressExtendedProtection" -ErrorAction SilentlyContinue
+if ($epa.SuppressExtendedProtection -eq 0) {
+    Write-Host "✓ Extended Protection for Authentication habilitado" -ForegroundColor Green
+} else {
+    Write-Host "✗ HABILITAR Extended Protection for Authentication" -ForegroundColor Red
+}
+```
+
+### Actualizaciones críticas de seguridad
+
+- **CVE-2021-36942**: PetitPotam - EFSRPC coerción attack (KB5005413)
+- **CVE-2021-1675**: PrintNightmare relacionado con PrinterBug coerción (KB5004945)
+- **CVE-2019-1040**: LDAP Channel Binding bypass usado en coerción (KB4511553)
+- **CVE-2021-43893**: Vulnerabilidad RPC que facilita ataques de coerción (KB5008212)
+
+### Herramientas de detección específicas
+
+```powershell
+# Script para detectar intentos de coerción
+$rpcEvents = Get-WinEvent -FilterHashtable @{LogName='System'; ID=7045} -MaxEvents 100
+$rpcEvents | Where-Object {$_.Message -like "*lsarpc*" -or $_.Message -like "*efsrpc*"} |
+ForEach-Object {
+    Write-Warning "Posible intento de coerción: $($_.TimeCreated) - $($_.Message.Substring(0,100))"
+}
+
+# Monitorear conexiones RPC anómalas
+Get-NetTCPConnection | Where-Object {$_.LocalPort -eq 135 -and $_.State -eq "Established"} |
+Group-Object RemoteAddress | Where-Object Count -gt 5 |
+Select-Object Name, Count | Sort-Object Count -Descending
+```
+
+---
+
 ## 📚 Referencias
 
 - [PetitPotam - HackTricks](https://book.hacktricks.xyz/windows-hardening/active-directory-methodology/petitpotam)

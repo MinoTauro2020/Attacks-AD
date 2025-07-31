@@ -156,6 +156,47 @@ index="*" 4769
 
 ---
 
+## 🔧 Parches y actualizaciones
+
+| Parche/Update | Descripción                                                                                  |
+|---------------|----------------------------------------------------------------------------------------------|
+| **KB5025238** | Windows 11 22H2 - Mejoras en cifrado AES para tickets TGS y mitigación de Kerberoasting.    |
+| **KB5025221** | Windows 10 22H2 - Fortalecimiento de validaciones de SPN y auditoría de solicitudes TGS.    |
+| **KB5022906** | Windows Server 2022 - Mejoras en logging de eventos 4769 con metadatos adicionales.         |
+| **KB5022845** | Windows Server 2019 - Correcciones en manejo de tickets de servicio y cifrado RC4.          |
+| **KB4580390** | Windows Server 2016 - Parches para desactivar cifrado RC4 en cuentas de servicio.          |
+| **RSAT Updates** | Herramientas actualizadas para gestión de SPNs y políticas de cifrado Kerberos.      |
+
+### Configuraciones de registro recomendadas
+
+```powershell
+# Deshabilitar cifrado RC4 en Kerberos (forzar AES)
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa\Kerberos\Parameters" -Name "DefaultEncryptionType" -Value 0x18
+
+# Habilitar auditoría detallada de TGS
+auditpol /set /subcategory:"Kerberos Service Ticket Operations" /success:enable /failure:enable
+
+# Configurar política de contraseñas robustas para cuentas de servicio
+Set-ADDefaultDomainPasswordPolicy -MinPasswordLength 25 -ComplexityEnabled $true
+```
+
+### Configuraciones de GPO recomendadas
+
+```powershell
+# Aplicar políticas de cifrado AES en todo el dominio
+Set-ADDomainMode -Identity "midominio.local" -DomainMode Windows2016Domain
+Set-ADForestMode -Identity "midominio.local" -ForestMode Windows2016Forest
+```
+
+### Actualizaciones críticas de seguridad
+
+- **CVE-2022-37958**: Vulnerabilidad en validación de tickets TGS (parcheada en actualizaciones de noviembre 2022)
+- **CVE-2021-42287**: sAMAccountName spoofing que facilita Kerberoasting (KB5008102)
+- **CVE-2020-17049**: Vulnerabilidad en Kerberos KDC que permite bypass de validaciones (KB4586876)
+- **CVE-2019-1384**: Escalada de privilegios via SPNs mal configurados (KB4524244)
+
+---
+
 ## 🧑‍💻 ¿Cómo revisar cuentas con SPN en Active Directory?
 
 ```powershell

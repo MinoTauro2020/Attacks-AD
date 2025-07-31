@@ -106,6 +106,40 @@ index=security_logs (EventCode=4624 OR EventCode=4648 OR EventCode=10)
 
 ---
 
+## 🔧 Parches y actualizaciones
+
+| Parche/Update | Descripción                                                                                  |
+|---------------|----------------------------------------------------------------------------------------------|
+| **KB5025221** | Windows 11 22H2 - Mejoras en Windows Defender Credential Guard contra extracción de hashes. |
+| **KB5025175** | Windows 10 22H2 - Fortalecimiento de protección LSASS y mitigación Pass the Hash.           |
+| **KB5022906** | Windows Server 2022 - Mejoras en LSA Protection y auditoría de autenticación NTLM.          |
+| **KB5022845** | Windows Server 2019 - Correcciones en manejo de credenciales y protección de memoria.       |
+| **KB4580390** | Windows Server 2016 - Parches de seguridad para prevención de volcado de credenciales.      |
+| **TPM 2.0 Firmware** | Actualizaciones de firmware TPM para mejorar Credential Guard y Device Guard.     |
+
+### Configuraciones de registro recomendadas
+
+```powershell
+# Habilitar Credential Guard
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\DeviceGuard" -Name "EnableVirtualizationBasedSecurity" -Value 1
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\DeviceGuard" -Name "LsaCfgFlags" -Value 1
+
+# Activar LSA Protection
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa" -Name "RunAsPPL" -Value 1
+
+# Deshabilitar NTLM cuando sea posible
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa\MSV1_0" -Name "NtlmMinClientSec" -Value 0x20000000
+```
+
+### Actualizaciones críticas de seguridad
+
+- **CVE-2022-26925**: Vulnerabilidad LSA que facilita extracción de credenciales (KB5014754)
+- **CVE-2021-36934**: HiveNightmare - acceso no autorizado a archivos SAM (KB5005101)  
+- **CVE-2020-1472**: Zerologon - bypass de autenticación que facilita Pass the Hash (KB4556836)
+- **CVE-2019-1384**: Vulnerabilidad en Kerberos que permite extracción de hashes (KB4524244)
+
+---
+
 ## 🚨 Respuesta ante incidentes
 
 1. **Aísla inmediatamente** las cuentas sospechosas que muestran patrones de Pass the Hash.
