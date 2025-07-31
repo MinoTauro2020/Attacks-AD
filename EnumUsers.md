@@ -30,8 +30,8 @@ python3 /usr/share/doc/python3-impacket/examples/GetADUsers.py essos.local/daene
 ```
 username              lastlogon              pwdlastset             description
 --------------------- --------------------- ---------------------- -------------
-jon.snow              2025-05-23 07:05:19   2025-02-26 09:30:35    Lord Commander
-arya.stark            2025-05-21 11:15:42   2025-03-12 08:12:12    No One
+jon.snow              2024-05-23 07:05:19   2024-02-26 09:30:35    Lord Commander
+arya.stark            2024-05-21 11:15:42   2024-03-12 08:12:12    No One
 ...
 ```
 

