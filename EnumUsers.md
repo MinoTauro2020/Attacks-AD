@@ -110,6 +110,148 @@ index=dc_logs sourcetype=WinEventLog:Security EventCode=4661 Object_Type=SAM_USE
 
 ---
 
+## 🛡️ Detección con Windows Defender for Endpoint
+
+### Reglas de detección personalizadas
+
+```kql
+// User Enumeration - Detección de enumeración masiva de usuarios
+DeviceEvents
+| where ActionType == "LdapQuery"
+| where AdditionalFields has_any ("sAMAccountName", "userPrincipalName", "member", "objectClass=user")
+| summarize QueryCount = count(), UniqueQueries = dcount(AdditionalFields) by DeviceId, AccountName, bin(Timestamp, 5m)
+| where QueryCount > 50 or UniqueQueries > 20
+| order by QueryCount desc
+```
+
+```kql
+// Detección de herramientas de enumeración
+DeviceProcessEvents
+| where ProcessCommandLine has_any ("enum4linux", "ldapdomaindump", "windapsearch", "bloodhound", "adrecon")
+| project Timestamp, DeviceName, AccountName, ProcessCommandLine, InitiatingProcessFileName
+| order by Timestamp desc
+```
+
+```kql
+// Detección de acceso masivo a objetos de usuario
+DeviceEvents
+| where ActionType == "DirectoryServiceAccess"
+| where AdditionalFields has "SAM_USER" or AdditionalFields has "objectClass=user"
+| summarize AccessCount = count() by DeviceId, AccountName, bin(Timestamp, 2m)
+| where AccessCount > 30
+| order by AccessCount desc
+```
+
+### Alertas recomendadas
+
+| Regla | Descripción | Severidad |
+|-------|-------------|-----------|
+| **Mass User Enumeration** | Más de 50 consultas de usuario en 5 minutos | Media |
+| **User Enum Tools** | Detección de herramientas de enumeración conocidas | Alta |
+| **Directory Service Access Spike** | Acceso masivo a objetos de directorio | Media |
+
+---
+
+## 🦅 Detección con CrowdStrike Falcon
+
+### Hunting queries (Event Search)
+
+```sql
+-- Detección de enumeración de usuarios
+event_platform=Win event_simpleName=LdapSearch
+| search SearchFilter=*user* OR SearchFilter=*sAMAccountName* OR SearchFilter=*member*
+| bin _time span=5m
+| stats count as search_count, dc(SearchFilter) as unique_filters by ComputerName, UserName, _time
+| where search_count > 100 OR unique_filters > 50
+| sort - search_count
+```
+
+```sql
+-- Detección de herramientas de enumeración
+event_platform=Win event_simpleName=ProcessRollup2 
+| search (CommandLine=*enum4linux* OR CommandLine=*ldapdomaindump* OR CommandLine=*windapsearch* OR CommandLine=*adrecon*)
+| table _time, ComputerName, UserName, FileName, CommandLine, SHA256HashData
+| sort - _time
+```
+
+```sql
+-- Detección de acceso a información de usuario
+event_platform=Win event_simpleName=DirectoryServiceAccess
+| search ObjectType=User AccessMask=READ_PROPERTY
+| bin _time span=2m
+| stats count as access_count, dc(ObjectDN) as unique_objects by ComputerName, UserName, _time
+| where access_count > 50 OR unique_objects > 30
+| sort - access_count
+```
+
+### Custom IOAs (Indicators of Attack)
+
+```sql
+-- IOA para detectar enumeración de grupos privilegiados
+event_platform=Win event_simpleName=LdapSearch
+| search SearchFilter=*admin* OR SearchFilter=*operator* OR SearchFilter=*privileged*
+| stats count by ComputerName, UserName, SearchFilter
+| where count > 10
+```
+
+---
+
+## 🔍 Queries KQL para Microsoft Sentinel
+
+### Detección de User Enumeration
+
+```kql
+// Query principal para detectar enumeración de usuarios
+SecurityEvent
+| where EventID == 4661 // Object access
+| where ObjectName has "SAM_USER" or ObjectName has "objectClass=user"
+| where AccessMask != "0x0"
+| summarize AccessCount = count(), UniqueObjects = dcount(ObjectName) by Account, Computer, bin(TimeGenerated, 5m)
+| where AccessCount > 30 or UniqueObjects > 20
+| order by AccessCount desc
+```
+
+```kql
+// Correlación con herramientas de enumeración
+DeviceProcessEvents
+| where ProcessCommandLine has_any ("enum4linux", "ldapdomaindump", "windapsearch", "bloodhound")
+| join kind=inner (
+    SecurityEvent
+    | where EventID == 4661 and ObjectName has "SAM_USER"
+    | project TimeGenerated, Computer, Account, ObjectName
+) on $left.DeviceName == $right.Computer
+| project TimeGenerated, DeviceName, ProcessCommandLine, ObjectName
+```
+
+### Hunting avanzado
+
+```kql
+// Detección de enumeración de grupos privilegiados
+SecurityEvent
+| where EventID == 4661
+| where ObjectName has_any ("Domain Admins", "Enterprise Admins", "Administrators", "Account Operators")
+| summarize AccessCount = count(), UniqueGroups = dcount(ObjectName) by Account, Computer, bin(TimeGenerated, 10m)
+| where AccessCount > 10 or UniqueGroups > 3
+| order by AccessCount desc
+```
+
+```kql
+// Detección de enumeración seguida de ataques
+SecurityEvent
+| where EventID == 4661 and ObjectName has "SAM_USER"
+| summarize EnumCount = count() by Account, Computer, bin(TimeGenerated, 10m)
+| where EnumCount > 50
+| join kind=inner (
+    SecurityEvent
+    | where EventID in (4625, 4771, 4768) // Failed auth attempts
+    | summarize AuthAttempts = count() by Account, Computer, bin(TimeGenerated, 10m)
+    | where AuthAttempts > 5
+) on Account, Computer, TimeGenerated
+| project TimeGenerated, Account, Computer, EnumCount, AuthAttempts
+```
+
+---
+
 ## 🦾 Hardening y mitigación
 
 | Medida                                   | Descripción                                                                                  |
