@@ -11,6 +11,36 @@
 
 ---
 
+## 📈 Valores UAC críticos para delegación no restringida
+
+| Valor UAC | Hex | Decimal | Descripción |
+|-----------|-----|---------|-------------|
+| **0x80** | 0x80 | 128 | NORMAL_ACCOUNT - Cuenta normal sin delegación |
+| **0x2080** | 0x2080 | 8320 | NORMAL_ACCOUNT + TRUSTED_FOR_DELEGATION - **¡CRÍTICO!** |
+| **0x82080** | 0x82080 | 532608 | Incluye PASSWORD_NOT_REQUIRED + TRUSTED_FOR_DELEGATION |
+| **0x1002080** | 0x1002080 | 16785536 | Incluye DONT_EXPIRE_PASSWORD + TRUSTED_FOR_DELEGATION |
+
+> **⚠️ ALERTA CRÍTICA**: Cualquier cambio UAC que incluya el flag 0x2000 (TRUSTED_FOR_DELEGATION) en Event 4742 indica habilitación de delegación no restringida y debe generar alertas inmediatas.
+
+### Ejemplo de Event 4742 crítico (del problema reportado):
+
+```
+EventCode: 4742
+Message: A computer account was changed.
+Subject: Security ID: S-1-5-21-2000378473-4079260497-750590020-1112
+Account Name: daenerys.targaryen
+Account Domain: ESSOS
+Computer Account That Was Changed:
+Account Name: MALICIOSO2$
+Account Domain: ESSOS
+Changed Attributes:
+Old UAC Value: 0x80
+New UAC Value: 0x2080
+User Account Control: 'Trusted For Delegation' - Enabled
+```
+
+---
+
 ## 🛠️ ¿Cómo funciona y cómo se explota Unconstrained Delegation? (TTPs y ejemplos)
 
 | Vector/Nombre              | Descripción breve                                                                                   |
@@ -63,6 +93,7 @@ impacket-ticketer -nthash aad3b435b51404eeaad3b435b51404ee -domain-sid S-1-5-21-
 |---------------------------------|------------------------------------------------------------------------------|
 | **EventCode = 4624**            | Logons tipo 3 (network) desde servicios con delegación a recursos críticos.  |
 | **EventCode = 4648**            | Explicit credential use (runas) desde cuentas de servicio con delegación.     |
+| **EventCode = 4742**            | Cambios en cuentas de computadora - crítico cuando UAC cambia a 0x2080 (Trusted For Delegation). |
 | **EventCode = 4769**            | Solicitud de tickets TGS usando TGTs almacenados/forwarded.                   |
 | **EventCode = 4768**            | Solicitud TGT desde servicios (inusual - indica TGT forwarding).              |
 | **CommandLine/Image (Sysmon)**  | Procesos como Rubeus.exe, SpoolSample.py, findDelegation.py, mimikatz.exe.    |
@@ -85,6 +116,26 @@ index=wineventlog EventCode=4768
 | table _time, TargetUserName, IpAddress, ServiceName
 | stats count by TargetUserName, IpAddress
 | where count > 10
+```
+
+### Query: Detección de habilitación de delegación no restringida (Event 4742)
+
+```splunk
+index=wineventlog EventCode=4742
+| search Message="*New UAC Value: 0x2080*" OR Message="*Trusted For Delegation*" OR Message="*TrustedForDelegation*"
+| table _time, TargetUserName, SubjectUserName, Message
+| eval Severity="CRITICAL - Unconstrained Delegation Enabled"
+```
+
+### Query: Cambios de UAC específicos para delegación
+
+```splunk
+index=wineventlog EventCode=4742
+| rex field=Message "Old UAC Value: (?<OldUAC>0x[0-9A-Fa-f]+)"
+| rex field=Message "New UAC Value: (?<NewUAC>0x[0-9A-Fa-f]+)"
+| where NewUAC="0x2080" OR NewUAC="0x82080" OR NewUAC="0x1002080"
+| table _time, TargetUserName, SubjectUserName, OldUAC, NewUAC
+| eval Risk="HIGH - Trusted For Delegation Enabled"
 ```
 
 ### Query: Uso de herramientas de delegación
@@ -119,6 +170,19 @@ DeviceProcessEvents
 ```
 
 ```kql
+// Detección de Event 4742 - Habilitación de delegación no restringida
+SecurityEvent
+| where EventID == 4742 // Computer account changed
+| where EventData has_any ("0x2080", "Trusted For Delegation", "TrustedForDelegation")
+| extend OldUAC = extract(@"Old UAC Value: (0x[0-9A-Fa-f]+)", 1, EventData)
+| extend NewUAC = extract(@"New UAC Value: (0x[0-9A-Fa-f]+)", 1, EventData)
+| where NewUAC in ("0x2080", "0x82080", "0x1002080") // Trusted For Delegation flags
+| project TimeGenerated, Computer, TargetUserName, SubjectUserName, OldUAC, NewUAC
+| extend Severity = "CRITICAL"
+| order by TimeGenerated desc
+```
+
+```kql
 // Detección de herramientas de delegación conocidas
 DeviceProcessEvents
 | where FileName in~ ("Rubeus.exe", "mimikatz.exe") or ProcessCommandLine has_any ("SpoolSample", "findDelegation")
@@ -144,6 +208,7 @@ DeviceProcessEvents
 | Regla | Descripción | Severidad |
 |-------|-------------|-----------|
 | **TGT Extraction** | Extracción de TGT usando herramientas como Rubeus | Crítica |
+| **UAC Delegation Change** | Event 4742 con cambio UAC a 0x2080 (Trusted For Delegation) | Crítica |
 | **Delegation Tools** | Uso de herramientas de abuso de delegación | Alta |
 | **Coercion + Delegation** | Combinación de coerción y delegación | Crítica |
 | **Service TGT Request** | Servicios solicitando TGT (comportamiento anómalo) | Media |
@@ -159,6 +224,15 @@ DeviceProcessEvents
 event_platform=Win event_simpleName=ProcessRollup2
 | search (CommandLine=*Rubeus* AND (CommandLine=*dump* OR CommandLine=*tgtdeleg* OR CommandLine=*monitor*))
 | table _time, ComputerName, UserName, FileName, CommandLine, SHA256HashData
+| sort - _time
+```
+
+```sql
+-- Detección de Event 4742 - Habilitación de delegación no restringida
+event_platform=Win event_simpleName=UserAccountModified
+| search (UAC_New=*2080* OR EventData=*"Trusted For Delegation"*)
+| table _time, ComputerName, UserName, TargetUserName, UAC_Old, UAC_New
+| eval Severity="CRITICAL"
 | sort - _time
 ```
 
@@ -219,6 +293,19 @@ SecurityEvent
 | order by TGTRequests desc
 ```
 
+```kql
+// Detección crítica de Event 4742 - Habilitación de delegación no restringida
+SecurityEvent
+| where EventID == 4742 // Computer account changed
+| extend OldUAC = extract(@"Old UAC Value: (0x[0-9A-Fa-f]+)", 1, EventData)
+| extend NewUAC = extract(@"New UAC Value: (0x[0-9A-Fa-f]+)", 1, EventData)
+| extend TrustedForDelegation = extract(@"'Trusted For Delegation' - (\w+)", 1, EventData)
+| where NewUAC in ("0x2080", "0x82080", "0x1002080") or TrustedForDelegation == "Enabled"
+| project TimeGenerated, Computer, TargetUserName, SubjectUserName, OldUAC, NewUAC, TrustedForDelegation
+| extend AlertLevel = "CRITICAL", AttackType = "Unconstrained Delegation Enabled"
+| order by TimeGenerated desc
+```
+
 ### Hunting avanzado
 
 ```kql
@@ -269,13 +356,14 @@ SecurityEvent
 ## 🚨 Respuesta ante incidentes
 
 1. **Aislar inmediatamente el servidor comprometido** con delegación no restringida.
-2. **Revocar todos los tickets Kerberos** del dominio (reinicio de clave krbtgt).
-3. **Auditar logs de acceso** desde el servidor comprometido en las últimas 24-48 horas.
-4. **Revisar y eliminar configuraciones** de delegación no restringida innecesarias.
-5. **Cambiar credenciales** de todas las cuentas que se autenticaron contra el servidor.
-6. **Buscar indicadores de Golden Ticket** y otros tickets persistentes.
-7. **Implementar monitorización reforzada** en servicios restantes con delegación.
-8. **Documentar el incidente** y revisar configuraciones similares en el entorno.
+2. **Detectar y alertar sobre Event 4742** con cambios UAC a 0x2080 (Trusted For Delegation habilitado).
+3. **Revocar todos los tickets Kerberos** del dominio (reinicio de clave krbtgt).
+4. **Auditar logs de acceso** desde el servidor comprometido en las últimas 24-48 horas.
+5. **Revisar y eliminar configuraciones** de delegación no restringida innecesarias.
+6. **Cambiar credenciales** de todas las cuentas que se autenticaron contra el servidor.
+7. **Buscar indicadores de Golden Ticket** y otros tickets persistentes.
+8. **Implementar monitorización reforzada** en servicios restantes con delegación.
+9. **Documentar el incidente** y revisar configuraciones similares en el entorno.
 
 ---
 
@@ -294,6 +382,39 @@ Select-Object Name,TrustedForDelegation,ServicePrincipalName,Description
 Get-WinEvent -FilterHashtable @{LogName='Security'; ID=4742} |
 Where-Object {$_.Message -like "*TrustedForDelegation*"} |
 Select-Object TimeCreated,Id,@{Name='ComputerModified';Expression={($_.Properties[0].Value)}}
+```
+
+### Detectar habilitación de delegación vía cambios UAC (Event 4742)
+
+```powershell
+# Detectar cambios críticos de UAC que habilitan delegación no restringida
+Get-WinEvent -FilterHashtable @{LogName='Security'; ID=4742} |
+Where-Object {$_.Message -match "New UAC Value: 0x2080|Trusted For Delegation.*Enabled"} |
+ForEach-Object {
+    $Properties = $_.Properties
+    [PSCustomObject]@{
+        TimeCreated = $_.TimeCreated
+        TargetAccount = $Properties[0].Value
+        SubjectAccount = $Properties[1].Value
+        OldUACValue = if($_.Message -match "Old UAC Value: (0x[0-9A-Fa-f]+)") {$matches[1]} else {"Unknown"}
+        NewUACValue = if($_.Message -match "New UAC Value: (0x[0-9A-Fa-f]+)") {$matches[1]} else {"Unknown"}
+        Severity = "CRITICAL - Unconstrained Delegation Enabled"
+    }
+} | Format-Table -AutoSize
+```
+
+### Monitoreo en tiempo real de cambios UAC
+
+```powershell
+# Monitor en tiempo real para detectar habilitación de delegación
+Register-WmiEvent -Query "SELECT * FROM Win32_NTLogEvent WHERE LogFile='Security' AND EventCode=4742" -Action {
+    $Event = $Event.SourceEventArgs.NewEvent
+    if ($Event.Message -match "New UAC Value: 0x2080|Trusted For Delegation.*Enabled") {
+        Write-Warning "CRÍTICO: Delegación no restringida habilitada en $(Get-Date)"
+        Write-Host "Cuenta afectada: $($Event.InsertionStrings[0])"
+        Write-Host "Mensaje completo: $($Event.Message)"
+    }
+}
 ```
 
 ### Buscar cuentas de usuario con delegación (menos común pero crítico)
@@ -323,10 +444,24 @@ $UnconstrainedComputers | Format-Table Name,ServicePrincipalName,LastLogonDate -
 Write-Host "=== USUARIOS CON DELEGACIÓN NO RESTRINGIDA ===" -ForegroundColor Red
 $UnconstrainedUsers | Format-Table Name,ServicePrincipalName,LastLogonDate -AutoSize
 
+# Revisar eventos recientes de habilitación de delegación (Event 4742)
+Write-Host "=== EVENTOS RECIENTES DE HABILITACIÓN DE DELEGACIÓN ===" -ForegroundColor Yellow
+$RecentDelegationEvents = Get-WinEvent -FilterHashtable @{LogName='Security'; ID=4742; StartTime=(Get-Date).AddDays(-7)} -ErrorAction SilentlyContinue |
+Where-Object {$_.Message -match "New UAC Value: 0x2080|Trusted For Delegation.*Enabled"} |
+Select-Object TimeCreated, @{Name='TargetAccount';Expression={$_.Properties[0].Value}}, @{Name='SubjectAccount';Expression={$_.Properties[1].Value}} -First 10
+
+if ($RecentDelegationEvents) {
+    $RecentDelegationEvents | Format-Table -AutoSize
+    Write-Host "⚠️ Se encontraron eventos recientes de habilitación de delegación" -ForegroundColor Yellow
+} else {
+    Write-Host "✓ No se encontraron eventos recientes de habilitación de delegación" -ForegroundColor Green
+}
+
 if ($UnconstrainedComputers -or $UnconstrainedUsers) {
     Write-Host "¡CRÍTICO! Se encontraron cuentas con delegación no restringida" -ForegroundColor Red
 } else {
     Write-Host "✓ No se encontraron cuentas con delegación no restringida" -ForegroundColor Green
+}
 }
 ```
 

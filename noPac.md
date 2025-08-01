@@ -52,7 +52,7 @@ secretsdump.py -k -no-pass ESSOS.LOCAL/administrator@dc01.essos.local
 | Evento clave | Descripción                                                                              |
 |--------------|-----------------------------------------------------------------------------------------|
 | **4741**     | Creación de cuenta de máquina (MachineAccountQuota abuse/noPac)                         |
-| **4742**     | Modificación de cuenta de máquina (nombre, contraseña, atributos)                       |
+| **4742**     | Modificación de cuenta de máquina (nombre, contraseña, atributos) - **¡CRÍTICO si UAC cambia a 0x2080 (delegación)!** |
 | **4743**     | Borrado de cuenta de máquina (limpieza)                                                 |
 | **4768/4769**| Solicitud de TGT/TGS Kerberos con la cuenta comprometida (suplantación, abuso tickets)  |
 | **4624**     | Inicio de sesión (tipo 3/red) usando la máquina falsa                                   |
@@ -76,6 +76,18 @@ index=dc_logs EventCode=4742
 | search AttributeName="sAMAccountName" OR AttributeName="servicePrincipalName" OR AttributeName="userAccountControl"
 | table _time, TargetAccountName, SubjectAccountName, AttributeName, OldValue, NewValue, host
 ```
+
+### Detección crítica: Delegación no restringida habilitada (Event 4742)
+
+```splunk
+index=dc_logs EventCode=4742
+| search Message="*New UAC Value: 0x2080*" OR Message="*Trusted For Delegation*"
+| table _time, TargetAccountName, SubjectAccountName, Message
+| eval AlertType="CRITICAL - Unconstrained Delegation Enabled"
+| eval Technique="T1098.002 - Account Manipulation: Additional Cloud Credentials"
+```
+
+> **⚠️ DIFERENCIACIÓN**: Event 4742 con cambio UAC a 0x2080 indica **delegación no restringida** habilitada, NO un ataque noPac. Requiere investigación inmediata por riesgo de compromiso total del dominio.
 
 ### Detección de shell/dump vía creación de servicio y acceso a NTDS.dit
 
