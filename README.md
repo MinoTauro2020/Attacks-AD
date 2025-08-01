@@ -10,6 +10,11 @@ Repositorio de referencia y ayuda rápida sobre ataques, técnicas y hardening e
 - **Impersonation-Explain.md**: Tabla detallada de explicación, falsos positivos y verificación para cada técnica.
 - **Impersonation-Resume.md**: Resumen visual rápido de técnicas y herramientas principales.
 
+### 📦 Sistema de Paquetización para Clientes
+- **Client-Packaging-Methodology.md**: 🆕 **Metodología completa de paquetización** para organizar servicios de ciberseguridad en packs escalables.
+- **Service-Packages.md**: 🆕 **Definición de Service Packages** - TTPs organizados por nivel (Pack 1: Básico, Pack 2: Intermedio, Pack 3: Experto).
+- **Client-Scenarios-Implementation.md**: 🆕 **Guía de implementación por escenarios** - Metodologías específicas según acceso del cliente (máquina dedicada vs. solo SIEM/XDR).
+
 ### 🛠️ Técnicas Específicas
 - **Anonymous-Logon-Guest.md**: Cómo bloquear acceso de Anonymous Logon y Guest en Windows/AD.
 - **As-Rep-Roasting.md**: Detalles, detección y mitigación de AS-REP Roasting.
@@ -38,6 +43,7 @@ Repositorio de referencia y ayuda rápida sobre ataques, técnicas y hardening e
 - Para equipos de blue team y administradores que quieran reforzar la seguridad de AD y mainframes ante ataques reales y simulados.
 - Para pentesters/red teamers que necesiten consultar referencias y comandos en ataques de suplantación y sistemas mainframe.
 - Para especialistas en seguridad de mainframes z/OS que busquen técnicas de hardening y mitigación.
+- **Para consultores y empresas de ciberseguridad** que necesiten estructurar servicios escalables mediante el sistema de paquetización por niveles de complejidad y acceso del cliente.
 
 
 ---
