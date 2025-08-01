@@ -288,7 +288,7 @@ Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa\MSV1_0" -Name
 4. **Mapea el movimiento lateral** correlacionando eventos 4624/4776 en múltiples sistemas.
 5. **Busca persistencia** creada durante el período de compromiso activo.
 6. **Reinicia sistemas comprometidos** para limpiar credenciales en memoria.
-7. **Implementa monitoreo adicional** en sistemas afectados por 30-60 días.
+7. **Implementa monitorizacion adicional** en sistemas afectados por 30-60 días.
 
 ---
 

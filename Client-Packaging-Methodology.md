@@ -52,7 +52,7 @@ Este documento establece la metodología para organizar y entregar servicios de 
 
 ### 📊 **Escenario B: Cliente Solo SIEM/XDR**
 **Características:**
-- Acceso limitado a herramientas de monitoreo
+- Acceso limitado a herramientas de monitorizacion
 - Sin posibilidad de ejecución directa
 - Enfoque en hunting y análisis
 
@@ -157,7 +157,7 @@ Score = (Técnicas Detectadas / Total Técnicas) × 100
 - Queries de hunting personalizadas
 - Scripts de análisis de logs
 - Reglas Sigma/Yara
-- Dashboards de monitoreo
+- Dashboards de monitorizacion
 
 ### Templates de Documentación
 - 📋 Checklist de ejecución por pack
@@ -178,7 +178,7 @@ Score = (Técnicas Detectadas / Total Técnicas) × 100
 
 2. **Pack 2 → Pack 3:**
    - ≥80% de técnicas intermedias detectadas
-   - Herramientas avanzadas de monitoreo activas
+   - Herramientas avanzadas de monitorizacion activas
    - Equipo de SOC entrenado en TTPs intermedios
 
 ### Recomendaciones por Resultado
