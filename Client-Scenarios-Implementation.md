@@ -168,7 +168,7 @@ echo "=== VALIDACIÓN DE DETECCIÓN ==="
 
 ### 📋 Características del Escenario
 - ⚠️ Sin posibilidad de ejecución directa
-- ✅ Acceso a herramientas de monitoreo
+- ✅ Acceso a herramientas de monitorizacion
 - ✅ Acceso a logs históricos
 - ✅ Capacidad de crear reglas y alertas
 
@@ -320,7 +320,7 @@ index=windows EventCode=4624 Logon_Type IN (3,9,10)
 ## 🔄 Metodología Híbrida: SIEM + Laboratorio Limitado
 
 ### 📋 Escenario Combinado
-Algunos clientes pueden proporcionar acceso limitado a máquinas de testing junto con herramientas de monitoreo.
+Algunos clientes pueden proporcionar acceso limitado a máquinas de testing junto con herramientas de monitorizacion.
 
 ### 🎯 Estrategia Híbrida
 1. **Hunting Primero**: Identificar qué técnicas han ocurrido
@@ -369,7 +369,7 @@ graph TD
 ### Escenario B (Solo SIEM)
 ```splunk
 # Queries de hunting personalizadas
-# Dashboards de monitoreo
+# Dashboards de monitorizacion
 # Reglas de detección Sigma
 # Scripts de análisis de logs
 ```

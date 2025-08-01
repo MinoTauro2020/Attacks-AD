@@ -93,7 +93,7 @@
 
 - **Los APTs y ransomware buscan sistemáticamente activos sin SMB signing.**
 - **El enfoque del adversario se mueve a protocolos/servicios menos protegidos (LDAP, HTTP, RPC).**
-- **La defensa exige visibilidad total, hardening y monitoreo proactivo.**
+- **La defensa exige visibilidad total, hardening y monitorizacion proactivo.**
 
 ---
 

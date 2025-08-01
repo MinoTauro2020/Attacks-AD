@@ -209,7 +209,7 @@ Técnicas de persistencia, evasión avanzada y ataques a sistemas especializados
 
 #### Pack 2 → Pack 3
 - ✅ ≥80% de técnicas intermedias detectadas
-- ✅ Herramientas de monitoreo avanzado activas
+- ✅ Herramientas de monitorizacion avanzado activas
 - ✅ Parches críticos aplicados
 - ✅ Arquitectura de seguridad revisada
 
@@ -228,7 +228,7 @@ Técnicas de persistencia, evasión avanzada y ataques a sistemas especializados
 4. **Coerción**: Filtrado de tráfico específico
 
 #### Técnicas No Detectadas Pack 3
-1. **Golden Ticket**: Rotación KRBTGT + monitoreo eventos 4624
+1. **Golden Ticket**: Rotación KRBTGT + monitorizacion eventos 4624
 2. **DCShadow**: Monitoreo cambios en AD schema
 3. **ADCS**: Hardening de templates + auditoría
 4. **Mainframes**: Implementar logging específico z/OS

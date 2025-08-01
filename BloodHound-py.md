@@ -248,7 +248,7 @@ SecurityEvent
 3. **Busca actividad posterior** como Kerberoasting, ASREPRoast o intentos de escalada de privilegios.
 4. **Revisa logs de autenticación** para identificar el vector de compromiso inicial.
 5. **Cambia credenciales** de cuentas potencialmente expuestas y revisa permisos de delegación.
-6. **Implementa monitoreo adicional** en cuentas de servicio y grupos privilegiados identificados.
+6. **Implementa monitorizacion adicional** en cuentas de servicio y grupos privilegiados identificados.
 
 ---
 

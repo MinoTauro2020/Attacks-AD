@@ -303,7 +303,7 @@ Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\NTDS\Parameters"
 - **CVE-2020-1472**: Zerologon - impacta también conexiones LDAP (KB4556836)
 - **CVE-2019-1040**: Vulnerabilidad LDAP channel binding bypass (KB4511553)
 
-### Herramientas de monitoreo avanzadas
+### Herramientas de monitorizacion avanzadas
 
 ```powershell
 # Script para detectar intentos de brute force LDAP

@@ -463,7 +463,7 @@ SMF 118 - TCP/IP events
 DISPLAY SMF,O
 DISPLAY RACF,LIST,FAILED
 
-# Scripts de monitoreo automatizado
+# Scripts de monitorizacion automatizado
 //MONITOR  JOB  CLASS=A,MSGCLASS=H
 //STEP1    EXEC PGM=IKJEFT01
 //SYSTSPRT DD   SYSOUT=*

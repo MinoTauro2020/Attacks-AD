@@ -308,7 +308,7 @@ Set-ADUser -Identity "usuario_critico" -SmartcardLogonRequired $true
 - **CVE-2020-1472**: Zerologon - bypass completo de autenticación (KB4556836)
 - **CVE-2019-1384**: Vulnerabilidad en autenticación que permite bypass de políticas (KB4524244)
 
-### Herramientas de monitoreo mejoradas
+### Herramientas de monitorizacion mejoradas
 
 ```powershell
 # Script para detectar patrones de brute force en tiempo real

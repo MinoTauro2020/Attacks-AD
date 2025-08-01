@@ -81,7 +81,7 @@ index=windows EventCode=4624 Logon_Type=3 Source_Network_Address!="127.0.0.1" ea
 | SMB Enumeration | ✅ Detectado | ✅ Alertas configuradas | Optimizar umbral |
 | Anonymous Logon | ❌ Gap Crítico | ❌ Sin reglas | **Hardening urgente** |
 | AS-REP Roasting | ❌ No detectado | ❌ Sin alertas | Crear regla + hardening |
-| Kerberoasting | ⚠️ Parcial | ⚠️ Alertas limitadas | Extender monitoreo |
+| Kerberoasting | ⚠️ Parcial | ⚠️ Alertas limitadas | Extender monitorizacion |
 | SMB Relay | ⚠️ Parcial | ⚠️ Incompleto | Mejorar correlación |
 
 ### Score de Madurez Pack 1

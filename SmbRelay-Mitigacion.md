@@ -83,7 +83,7 @@ Red Team | Purple Team | Threat Hunter | Blue Team | Threat Intelligence
     - *Hipótesis si no es posible:*  
       - **Segmenta y aísla** estos sistemas en VLANs separadas.
       - **Limita acceso** a un número mínimo de administradores y usuarios.
-      - **Implementa EDR, monitoreo y alertas reforzadas**.
+      - **Implementa EDR, monitorizacion y alertas reforzadas**.
 
 - [ ] **Segmentar y aislar dispositivos legacy irremplazables** (impresoras, NAS, appliances).
     - *Afecta:* Minimiza el riesgo lateral y acceso directo de relay.
@@ -152,7 +152,7 @@ Red Team | Purple Team | Threat Hunter | Blue Team | Threat Intelligence
 ## 4️⃣ Recomendaciones Finales de Threat Intelligence
 
 - **Evalúa y prioriza el hardening de legacy y autenticación web: los adversarios buscarán siempre el eslabón más débil.**
-- **Si no puedes aplicar el hardening ideal, prioriza segmentación, monitoreo, restricciones de acceso y visibilidad.**
+- **Si no puedes aplicar el hardening ideal, prioriza segmentación, monitorizacion, restricciones de acceso y visibilidad.**
 - **Automatiza escaneos de legacy y relay con herramientas open source y comerciales.**
 - **Implementa dashboards de visibilidad y alertas específicas en el SIEM.**
 - **Educa a IT y SecOps sobre el riesgo real de mantener activos legacy y configuraciones inseguras, incluyendo servicios web internos vulnerables a HTTP relay.**
