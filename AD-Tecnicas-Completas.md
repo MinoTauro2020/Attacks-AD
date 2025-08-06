@@ -72,7 +72,7 @@ Este documento recopila todas las técnicas de pentesting en Active Directory or
 
 | Técnica | Herramientas | Estado en Repo |
 |---------|-------------|----------------|
-| **Password Spraying** | crackmapexec, DomainPasswordSpray | ❌ |
+| **Password Spraying** | crackmapexec, DomainPasswordSpray | ✅ (Password-Spraying.md) |
 | **Credential Stuffing** | crackmapexec, Spray-Passwords | ❌ |
 | **Smart Brute Force** | kerbrute con listas inteligentes | ❌ |
 
@@ -341,7 +341,7 @@ Este documento recopila todas las técnicas de pentesting en Active Directory or
 
 ## 📊 Estado Actual del Repositorio
 
-### ✅ Técnicas ya Documentadas (36)
+### ✅ Técnicas ya Documentadas (37)
 - AS-REP Roasting
 - Kerberoasting  
 - Pass-the-Hash
@@ -361,12 +361,13 @@ Este documento recopila todas las técnicas de pentesting en Active Directory or
 - Unconstrained Delegation
 - Constrained Delegation
 - S4U2Self/S4U2Proxy Abuse
-- Golden Ticket Attacks (NEW)
-- Silver Ticket Attacks (NEW)
-- DCSync Attack (NEW)
-- NTDS.dit Extraction (NEW)
+- Golden Ticket Attacks
+- Silver Ticket Attacks
+- DCSync Attack
+- NTDS.dit Extraction
+- Password Spraying (NEW)
 
-### ❌ Técnicas Pendientes de Documentar (>90)
+### ❌ Técnicas Pendientes de Documentar (>85)
 
 #### 🔴 Prioridad Alta (Técnicas Fundamentales):
 1. **Golden/Silver Ticket Attacks**
@@ -405,5 +406,5 @@ Este documento recopila todas las técnicas de pentesting en Active Directory or
 
 **Documento creado:** Julio 2024  
 **Técnicas identificadas:** ~150+ técnicas de AD pentesting  
-**Estado actual:** 36 documentadas, >90 pendientes  
+**Estado actual:** 37 documentadas, >85 pendientes  
 **Fuentes:** Recopilación de recursos estándar de AD pentesting  
