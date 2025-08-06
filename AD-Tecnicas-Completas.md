@@ -72,7 +72,7 @@ Este documento recopila todas las técnicas de pentesting en Active Directory or
 
 | Técnica | Herramientas | Estado en Repo |
 |---------|-------------|----------------|
-| **Password Spraying** | crackmapexec, DomainPasswordSpray | ❌ |
+| **Password Spraying** | crackmapexec, DomainPasswordSpray | ✅ (Password-Spraying.md) |
 | **Credential Stuffing** | crackmapexec, Spray-Passwords | ❌ |
 | **Smart Brute Force** | kerbrute con listas inteligentes | ❌ |
 
@@ -82,8 +82,8 @@ Este documento recopila todas las técnicas de pentesting en Active Directory or
 |---------|-------------|----------------|
 | **LSASS Dump** | mimikatz, procdump, comsvcs.dll | ❌ |
 | **SAM/SYSTEM Dump** | secretsdump.py, mimikatz | ❌ |
-| **NTDS.dit Extraction** | secretsdump.py, impacket | ❌ |
-| **DCSync** | mimikatz, secretsdump.py | ❌ |
+| **NTDS.dit Extraction** | secretsdump.py, impacket | ✅ (NTDS-dit-Extraction.md) |
+| **DCSync** | mimikatz, secretsdump.py | ✅ (DCSync.md) |
 | **Group Policy Passwords** | Get-GPPPassword, gpp-decrypt | ❌ |
 
 ---
@@ -103,21 +103,21 @@ Este documento recopila todas las técnicas de pentesting en Active Directory or
 
 | Técnica | Herramientas | Estado en Repo |
 |---------|-------------|----------------|
-| **Golden Ticket** | mimikatz, ticketer.py | ❌ |
-| **Silver Ticket** | mimikatz, ticketer.py | ❌ |
+| **Golden Ticket** | mimikatz, ticketer.py | ✅ (Golden-Ticket.md) |
+| **Silver Ticket** | mimikatz, ticketer.py | ✅ (Silver-Ticket.md) |
 | **Diamond Ticket** | Rubeus, mimikatz | ❌ |
 | **Sapphire Ticket** | Rubeus | ❌ |
-| **Pass-the-Ticket** | mimikatz, getTGT.py | ✅ (PassTheHash.md parcial) |
-| **Overpass-the-Hash** | mimikatz, getTGT.py | ❌ |
+| **Pass-the-Ticket** | mimikatz, getTGT.py | ✅ (PassTheHash.md, Impersonation-Attacks.md) |
+| **Overpass-the-Hash** | mimikatz, getTGT.py | ✅ (Impersonation-Attacks.md) |
 
 ### 3.3 Ataques de Delegación Kerberos
 
 | Técnica | Herramientas | Estado en Repo |
 |---------|-------------|----------------|
-| **Unconstrained Delegation** | Rubeus, findDelegation.py | ❌ |
-| **Constrained Delegation** | Rubeus, getST.py | ❌ |
+| **Unconstrained Delegation** | Rubeus, findDelegation.py | ✅ (Unconstrained-Delegation.md) |
+| **Constrained Delegation** | Rubeus, getST.py | ✅ (Constrained-Delegation.md) |
 | **Resource-Based Constrained Delegation** | Rubeus, rbcd.py | ✅ (RBCD.md) |
-| **S4U2Self/S4U2Proxy Abuse** | Rubeus, getST.py | ❌ |
+| **S4U2Self/S4U2Proxy Abuse** | Rubeus, getST.py | ✅ (S4U2Self-S4U2Proxy-Abuse.md) |
 
 ---
 
@@ -127,21 +127,21 @@ Este documento recopila todas las técnicas de pentesting en Active Directory or
 
 | Técnica | Herramientas | Estado en Repo |
 |---------|-------------|----------------|
-| **SMB Relay** | ntlmrelayx.py, Responder | ✅ (SmbRelay-Attack.md) |
-| **HTTP Relay** | ntlmrelayx.py | ❌ |
-| **LDAP Relay** | ntlmrelayx.py --target ldap | ❌ |
+| **SMB Relay** | ntlmrelayx.py, Responder | ✅ (SmbRelay-Attack.md, Responder-Ntlmrelay.md) |
+| **HTTP Relay** | ntlmrelayx.py | ✅ (RelayAttack-attacks.md, RelayAttacks-Teoric-Defense.md) |
+| **LDAP Relay** | ntlmrelayx.py --target ldap | ✅ (RelayAttack-attacks.md, RelayAttacks-Teoric-Defense.md) |
 | **MSSQL Relay** | ntlmrelayx.py --target mssql | ❌ |
-| **Cross-Protocol Relay** | ntlmrelayx.py multiples targets | ❌ |
+| **Cross-Protocol Relay** | ntlmrelayx.py multiples targets | ✅ (RelayAttack-attacks.md) |
 
 ### 4.2 Coerción de Autenticación
 
 | Técnica | Herramientas | Estado en Repo |
 |---------|-------------|----------------|
-| **PrinterBug/SpoolSample** | printerbug.py, SpoolSample | ✅ (Coerce.md) |
-| **PetitPotam** | PetitPotam.py | ✅ (Coerce.md) |
+| **PrinterBug/SpoolSample** | printerbug.py, SpoolSample | ✅ (Coerce.md, RelayAttack-attacks.md) |
+| **PetitPotam** | PetitPotam.py | ✅ (Coerce.md, RelayAttack-attacks.md) |
 | **PrivExchange** | privexchange.py | ❌ |
 | **CoercedPotato** | CoercedPotato | ❌ |
-| **DFSCoerce** | dfscoerce.py | ❌ |
+| **DFSCoerce** | dfscoerce.py | ✅ (Coerce.md, RelayAttack-attacks.md) |
 
 ### 4.3 Relay con ADCS
 
@@ -223,8 +223,8 @@ Este documento recopila todas las técnicas de pentesting en Active Directory or
 |---------|-------------|----------------|
 | **Pass-the-Hash** | mimikatz, crackmapexec | ✅ (PassTheHash.md) |
 | **Pass-the-Ticket** | mimikatz, getTGT.py | ❌ |
-| **Pass-the-Key** | Rubeus, mimikatz | ❌ |
-| **Overpass-the-Hash** | Rubeus, mimikatz | ❌ |
+| **Pass-the-Key** | Rubeus, mimikatz | ✅ (Impersonation-Attacks.md) |
+| **Overpass-the-Hash** | Rubeus, mimikatz | ✅ (Impersonation-Attacks.md) |
 
 ### 7.2 Ejecución Remota
 
@@ -286,17 +286,17 @@ Este documento recopila todas las técnicas de pentesting en Active Directory or
 
 | Técnica | Herramientas | Estado en Repo |
 |---------|-------------|----------------|
-| **Printer Bug + Unconstrained** | printerbug.py, Rubeus monitor | ❌ |
-| **Ticket Extraction** | Rubeus dump, mimikatz | ❌ |
-| **Computer Account Takeover** | Rubeus, mimikatz | ❌ |
+| **Printer Bug + Unconstrained** | printerbug.py, Rubeus monitor | ✅ (Unconstrained-Delegation.md) |
+| **Ticket Extraction** | Rubeus dump, mimikatz | ✅ (Unconstrained-Delegation.md) |
+| **Computer Account Takeover** | Rubeus, mimikatz | ✅ (Unconstrained-Delegation.md) |
 
 ### 9.2 Constrained Delegation
 
 | Técnica | Herramientas | Estado en Repo |
 |---------|-------------|----------------|
-| **S4U2Self Abuse** | Rubeus s4u, getST.py | ❌ |
-| **S4U2Proxy Abuse** | Rubeus s4u, getST.py | ❌ |
-| **Protocol Transition** | Rubeus, mimikatz | ❌ |
+| **S4U2Self Abuse** | Rubeus s4u, getST.py | ✅ (Constrained-Delegation.md, S4U2Self-S4U2Proxy-Abuse.md) |
+| **S4U2Proxy Abuse** | Rubeus s4u, getST.py | ✅ (Constrained-Delegation.md, S4U2Self-S4U2Proxy-Abuse.md) |
+| **Protocol Transition** | Rubeus, mimikatz | ✅ (Constrained-Delegation.md) |
 
 ### 9.3 Resource-Based Constrained Delegation
 
@@ -341,7 +341,7 @@ Este documento recopila todas las técnicas de pentesting en Active Directory or
 
 ## 📊 Estado Actual del Repositorio
 
-### ✅ Técnicas ya Documentadas (30)
+### ✅ Técnicas ya Documentadas (37)
 - AS-REP Roasting
 - Kerberoasting  
 - Pass-the-Hash
@@ -355,11 +355,19 @@ Este documento recopila todas las técnicas de pentesting en Active Directory or
 - Enumeration via RPC, LDAP, Users
 - Anonymous Logon techniques
 - Lateral Movement with NetExec
-- Coercion attacks (PrinterBug, PetitPotam)
+- Coercion attacks (PrinterBug, PetitPotam, DFSCoerce)
 - Brute Force attacks (Kerberos, LDAP)
 - Impersonation techniques overview
+- Unconstrained Delegation
+- Constrained Delegation
+- S4U2Self/S4U2Proxy Abuse
+- Golden Ticket Attacks
+- Silver Ticket Attacks
+- DCSync Attack
+- NTDS.dit Extraction
+- Password Spraying (NEW)
 
-### ❌ Técnicas Pendientes de Documentar (>100)
+### ❌ Técnicas Pendientes de Documentar (>85)
 
 #### 🔴 Prioridad Alta (Técnicas Fundamentales):
 1. **Golden/Silver Ticket Attacks**
@@ -398,5 +406,5 @@ Este documento recopila todas las técnicas de pentesting en Active Directory or
 
 **Documento creado:** Julio 2024  
 **Técnicas identificadas:** ~150+ técnicas de AD pentesting  
-**Estado actual:** 30 documentadas, >98 pendientes  
+**Estado actual:** 37 documentadas, >85 pendientes  
 **Fuentes:** Recopilación de recursos estándar de AD pentesting  
