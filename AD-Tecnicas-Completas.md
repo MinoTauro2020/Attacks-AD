@@ -51,7 +51,7 @@ Este documento recopila todas las técnicas de pentesting en Active Directory or
 | **BloodHound** | SharpHound, BloodHound-py | ✅ (BloodHound-py.md) |
 | **ADRecon** | ADRecon.ps1 | ❌ |
 | **PingCastle** | PingCastle | ❌ |
-| **PlumHound** | PlumHound | ❌ |
+| **PlumHound** | PlumHound | ✅ (PlumHound.md) |
 | **NetExec (ex-CrackMapExec)** | netexec, crackmapexec | ✅ (Lateral-nxc.md) |
 
 ---

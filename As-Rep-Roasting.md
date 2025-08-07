@@ -551,6 +551,139 @@ Propiedades de usuario → Cuenta → Opciones de cuenta →
 
 ---
 
+## 🚨 Respuesta ante incidentes
+
+### Procedimientos de respuesta inmediata
+
+1. **Identificación del ataque AS-REP Roasting:**
+   - Confirmar eventos 4768 con Pre_Authentication_Type=0 desde IPs sospechosas
+   - Verificar si las cuentas objetivo existen y tienen preautenticación deshabilitada
+   - Correlacionar con herramientas de enumeración como GetNPUsers.py
+
+2. **Contención inmediata:**
+   - Bloquear la IP origen del ataque en firewalls y sistemas de seguridad
+   - Habilitar inmediatamente preautenticación en cuentas vulnerables afectadas
+   - Cambiar contraseñas de cuentas que fueron objetivo del AS-REP Roasting
+
+3. **Análisis de impacto:**
+   - Determinar qué cuentas fueron enumeradas sin preautenticación
+   - Evaluar la fortaleza de las contraseñas de las cuentas comprometidas
+   - Verificar si existe evidencia de cracking offline exitoso
+
+4. **Investigación forense:**
+   - Buscar herramientas de AS-REP Roasting en el endpoint origen
+   - Analizar logs de autenticación para identificar acceso inicial
+   - Revisar configuraciones de cuentas para determinar cómo se deshabilitó preautenticación
+
+5. **Recuperación y endurecimiento:**
+   - Habilitar preautenticación Kerberos en todas las cuentas del dominio
+   - Implementar contraseñas robustas en cuentas previamente vulnerables
+   - Fortalecer monitoreo de eventos 4768 con alertas en tiempo real
+
+### Scripts de respuesta automatizada
+
+```powershell
+# Script de respuesta para AS-REP Roasting
+function Respond-ASREPRoastingAttack {
+    param($AttackerIP, $VulnerableAccounts, $AffectedDCs)
+    
+    # Bloquear IP atacante
+    New-NetFirewallRule -DisplayName "Block AS-REP Roasting IP" -Direction Inbound -RemoteAddress $AttackerIP -Action Block
+    
+    # Habilitar preautenticación en cuentas vulnerables
+    foreach ($account in $VulnerableAccounts) {
+        Set-ADAccountControl -Identity $account -DoesNotRequirePreAuth $false
+        Write-EventLog -LogName Security -Source "ADSecurity" -EventId 9004 -Message "Enabled pre-authentication for account $account after AS-REP Roasting attempt"
+        
+        # Cambiar contraseña por seguridad
+        $newPassword = -join ((33..126) | Get-Random -Count 32 | % {[char]$_})
+        Set-ADAccountPassword -Identity $account -NewPassword (ConvertTo-SecureString $newPassword -AsPlainText -Force) -Reset
+    }
+    
+    # Auditar todas las cuentas sin preautenticación
+    $allVulnerable = Get-ADUser -Filter {DoesNotRequirePreAuth -eq $true} -Properties DoesNotRequirePreAuth
+    foreach ($vuln in $allVulnerable) {
+        Write-Warning "Account without pre-auth found: $($vuln.Name)"
+        # Opcional: habilitar automáticamente
+        # Set-ADAccountControl -Identity $vuln.DistinguishedName -DoesNotRequirePreAuth $false
+    }
+    
+    # Notificar al equipo de seguridad
+    Send-MailMessage -To "security-team@company.com" -Subject "ALERT: AS-REP Roasting Attack Detected" -Body "AS-REP Roasting from $AttackerIP targeting accounts: $($VulnerableAccounts -join ', '). Pre-authentication enabled and passwords reset."
+}
+
+# Script para auditar y remediar configuraciones vulnerables
+function Audit-PreAuthenticationSettings {
+    # Buscar todas las cuentas sin preautenticación
+    $vulnerableUsers = Get-ADUser -Filter {DoesNotRequirePreAuth -eq $true} -Properties DoesNotRequirePreAuth, LastLogonDate, PasswordLastSet
+    
+    foreach ($user in $vulnerableUsers) {
+        Write-Host "Vulnerable Account: $($user.Name)" -ForegroundColor Red
+        Write-Host "  Last Logon: $($user.LastLogonDate)" -ForegroundColor Yellow
+        Write-Host "  Password Last Set: $($user.PasswordLastSet)" -ForegroundColor Yellow
+        
+        # Verificar si la cuenta está activa
+        if ((Get-Date) - $user.LastLogonDate -gt (New-TimeSpan -Days 90)) {
+            Write-Warning "  Account appears inactive (>90 days) - consider disabling"
+        }
+        
+        # Verificar fortaleza de contraseña
+        if ((Get-Date) - $user.PasswordLastSet -gt (New-TimeSpan -Days 365)) {
+            Write-Warning "  Password is old (>365 days) - requires immediate change"
+        }
+    }
+    
+    return $vulnerableUsers
+}
+```
+
+### Checklist de respuesta a incidentes
+
+- [ ] **Detección confirmada**: Validar eventos 4768 con Pre_Authentication_Type=0
+- [ ] **Contención**: Bloquear IP atacante y aislar sistemas comprometidos
+- [ ] **Remediación**: Habilitar preautenticación en cuentas vulnerables afectadas
+- [ ] **Rotación**: Cambiar contraseñas de cuentas que fueron objetivo del ataque
+- [ ] **Auditoría**: Revisar todas las cuentas del dominio para configuraciones similares
+- [ ] **Monitoreo**: Implementar alertas para futuras solicitudes AS-REQ sin preauth
+- [ ] **Documentación**: Registrar cuentas afectadas y medidas implementadas
+- [ ] **Seguimiento**: Monitorear por 30 días actividad relacionada con cuentas afectadas
+- [ ] **Política**: Actualizar políticas para prevenir deshabilitación de preautenticación
+
+### Hardening post-incidente
+
+```powershell
+# Script para implementar hardening completo post AS-REP Roasting
+function Implement-ASREPHardening {
+    # 1. Habilitar preautenticación en todas las cuentas
+    Get-ADUser -Filter {DoesNotRequirePreAuth -eq $true} | ForEach-Object {
+        Set-ADAccountControl -Identity $_.DistinguishedName -DoesNotRequirePreAuth $false
+        Write-Host "Enabled pre-authentication for: $($_.Name)" -ForegroundColor Green
+    }
+    
+    # 2. Configurar política de auditoría avanzada
+    auditpol /set /subcategory:"Kerberos Authentication Service" /success:enable /failure:enable
+    
+    # 3. Configurar alertas en tiempo real (requiere configuración de SIEM)
+    $alertScript = @"
+# Alerta para AS-REP sin preautenticación
+Get-WinEvent -FilterHashtable @{LogName='Security'; ID=4768} | Where-Object {
+    `$_.Properties[7].Value -eq 0  # Pre_Authentication_Type = 0
+} | ForEach-Object {
+    Write-EventLog -LogName Application -Source "ASREPAlert" -EventId 1001 -Message "AS-REP request without pre-auth detected from `$(`$_.Properties[6].Value)"
+}
+"@
+    
+    # 4. Implementar monitoreo de cambios en configuración de preautenticación
+    $gpo = New-GPO -Name "Monitor Pre-Authentication Changes"
+    # Configurar auditoría de cambios en objetos de usuario
+    Set-GPRegistryValue -Guid $gpo.Id -Key "HKLM\SYSTEM\CurrentControlSet\Control\Lsa\Audit" -ValueName "AuditAccountManagement" -Type DWord -Value 3
+    
+    Write-Host "AS-REP Roasting hardening completed successfully" -ForegroundColor Green
+}
+```
+
+---
+
 ## 📚 Referencias
 
 - [AS-REP Roasting - HackTricks](https://book.hacktricks.xyz/windows-hardening/active-directory-methodology/as-rep-roasting)

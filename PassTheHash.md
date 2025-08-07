@@ -608,6 +608,136 @@ Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa\MSV1_0" -Name
 
 ---
 
+## 🚨 Respuesta ante incidentes
+
+### Procedimientos de respuesta inmediata
+
+1. **Identificación del ataque Pass the Hash:**
+   - Detectar autenticación anómala con eventos 4624 tipo 3 (Network logon)
+   - Correlacionar múltiples logons desde misma IP a diferentes sistemas
+   - Identificar patrones de movimiento lateral rápido sin autenticación interactiva
+
+2. **Contención inmediata:**
+   - Aislar inmediatamente la IP/sistema origen del ataque
+   - Revocar sesiones activas de las cuentas comprometidas
+   - Bloquear temporalmente las cuentas afectadas si es posible
+   - Cambiar contraseñas de cuentas comprometidas identificadas
+
+3. **Análisis de impacto:**
+   - Determinar el alcance del movimiento lateral realizado
+   - Identificar sistemas accedidos y datos potencialmente comprometidos
+   - Evaluar privilegios de las cuentas utilizadas en el ataque
+   - Revisar logs para identificar la fuente inicial de extracción de hashes
+
+4. **Investigación forense:**
+   - Buscar herramientas de extracción de credenciales (Mimikatz, etc.)
+   - Analizar volcados de memoria LSASS o archivos SAM comprometidos
+   - Verificar integridad de controladores de dominio
+   - Determinar método de acceso inicial y persistencia
+
+5. **Recuperación y endurecimiento:**
+   - Resetear contraseñas de todas las cuentas potencialmente comprometidas
+   - Implementar Credential Guard en sistemas críticos
+   - Habilitar LSA Protection en todos los servidores
+   - Reforzar segmentación de red y principio de menor privilegio
+
+### Scripts de respuesta automatizada
+
+```powershell
+# Script de respuesta para detección de Pass the Hash
+function Respond-PassTheHashAttack {
+    param($SuspiciousIP, $CompromisedAccounts, $AffectedSystems)
+    
+    # Bloquear IP atacante en firewall
+    New-NetFirewallRule -DisplayName "Block PTH Attack IP" -Direction Inbound -RemoteAddress $SuspiciousIP -Action Block
+    
+    # Revocar todas las sesiones de las cuentas comprometidas
+    foreach ($account in $CompromisedAccounts) {
+        # Forzar logout de sesiones activas
+        Get-WmiObject -Class Win32_LogonSession | Where-Object {$_.LogonType -eq 3} | ForEach-Object {
+            $logonId = $_.LogonId
+            $user = Get-WmiObject -Class Win32_LoggedOnUser | Where-Object {$_.Dependent -like "*$logonId*"}
+            if ($user.Antecedent -like "*$account*") {
+                logoff $logonId
+            }
+        }
+        
+        # Cambiar contraseña inmediatamente
+        $newPassword = -join ((33..126) | Get-Random -Count 32 | % {[char]$_})
+        Set-ADAccountPassword -Identity $account -NewPassword (ConvertTo-SecureString $newPassword -AsPlainText -Force) -Reset
+        Write-EventLog -LogName Security -Source "ADSecurity" -EventId 9003 -Message "Emergency password reset for account $account due to Pass the Hash attack"
+    }
+    
+    # Limpiar credenciales en memoria de sistemas afectados
+    foreach ($system in $AffectedSystems) {
+        Invoke-Command -ComputerName $system -ScriptBlock {
+            # Limpiar cache de credenciales
+            klist purge
+            # Reiniciar servicio Netlogon para limpiar credenciales cacheadas
+            Restart-Service Netlogon -Force
+        }
+    }
+    
+    # Notificar incidente crítico
+    Send-MailMessage -To "security-team@company.com" -Subject "CRITICAL: Pass the Hash Attack Detected" -Body "PTH attack from $SuspiciousIP affecting accounts: $($CompromisedAccounts -join ', '). Immediate response initiated."
+}
+
+# Script para implementar defensas contra Pass the Hash
+function Enable-AntiPassTheHashDefenses {
+    # Habilitar Credential Guard
+    bcdedit /set {0cb3b571-2f2e-4343-a879-d86a476d7215} loadoptions DISABLE-LSA-ISO
+    bcdedit /set {0cb3b571-2f2e-4343-a879-d86a476d7215} device partition=C:
+    bcdedit /set hypervisorlaunchtype auto
+    
+    # Configurar LSA Protection
+    Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa" -Name "RunAsPPL" -Value 1
+    
+    # Deshabilitar WDigest para prevenir almacenamiento de credenciales en texto plano
+    Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\WDigest" -Name "UseLogonCredential" -Value 0
+    
+    # Configurar políticas de autenticación restrictiva
+    Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" -Name "LocalAccountTokenFilterPolicy" -Value 0
+    
+    Write-Host "Anti-Pass-the-Hash defenses enabled. Reboot required for full effect."
+}
+```
+
+### Checklist de respuesta a incidentes
+
+- [ ] **Detección confirmada**: Validar patrones de autenticación sospechosos tipo Pass the Hash
+- [ ] **Contención**: Aislar sistemas origen e IP atacante inmediatamente
+- [ ] **Evaluación**: Identificar cuentas y sistemas comprometidos
+- [ ] **Revocación**: Terminar sesiones activas y cambiar contraseñas comprometidas
+- [ ] **Limpieza**: Purgar credenciales cacheadas en sistemas afectados
+- [ ] **Fortalecimiento**: Implementar Credential Guard y LSA Protection
+- [ ] **Monitoreo**: Intensificar vigilancia de autenticación anómala por 30 días
+- [ ] **Documentación**: Registrar IoCs y actualizar playbooks de respuesta
+- [ ] **Seguimiento**: Verificar que no persistan credenciales comprometidas
+
+### Indicadores de compromiso (IoCs) típicos
+
+```
+Procesos sospechosos:
+- mimikatz.exe, sekurlsa::logonpasswords
+- psexec.exe con autenticación por hash
+- crackmapexec con flags -H
+- wmiexec.py con hashes
+
+Eventos de Windows:
+- 4624 Tipo 3 masivos desde misma IP
+- 4648 Explicit credential usage
+- 4776 NTLM authentication con misma cuenta en múltiples sistemas
+- 4625 Failed logons seguidos de 4624 exitosos
+
+Artifacts forenses:
+- Archivos de volcado de LSASS (*.dmp)
+- Herramientas de extracción de credenciales
+- Scripts de automatización de Pass the Hash
+- Conexiones de red anómalas en puertos 445, 135, 5985
+```
+
+---
+
 ## 📚 Referencias
 
 - [Mimikatz - Credential Extraction](https://github.com/gentilkiwi/mimikatz)
