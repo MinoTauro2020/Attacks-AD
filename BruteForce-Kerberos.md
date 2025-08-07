@@ -318,6 +318,200 @@ $events | Group-Object Properties[5] | Where-Object Count -gt 5 | Select-Object 
 
 ---
 
+## 🚨 Respuesta ante incidentes
+
+### Procedimientos de respuesta inmediata
+
+1. **Identificación del ataque Kerberos Brute Force:**
+   - Confirmar patrones de eventos 4768/4771 masivos desde IPs específicas
+   - Verificar intentos contra múltiples cuentas en ventanas de tiempo cortas
+   - Correlacionar con herramientas de fuerza bruta detectadas (kerbrute, CME)
+
+2. **Contención inmediata:**
+   - Bloquear inmediatamente las IPs origen del ataque en firewalls y proxies
+   - Implementar rate limiting temporal en el puerto 88 (Kerberos) para IPs sospechosas
+   - Habilitar bloqueo automático de cuentas si no está activado
+
+3. **Evaluación de impacto:**
+   - Identificar si alguna cuenta fue comprometida exitosamente
+   - Revisar si hay autenticaciones exitosas (4768 exitosos) tras intentos fallidos
+   - Evaluar la lista de cuentas objetivo para determinar su criticidad
+
+4. **Investigación forense:**
+   - Analizar logs para identificar el vector de acceso inicial del atacante
+   - Buscar herramientas de enumeración previas (LDAP, SMB, etc.)
+   - Verificar si existen credenciales válidas obtenidas del ataque
+
+5. **Recuperación y endurecimiento:**
+   - Resetear contraseñas de cuentas que tuvieron intentos exitosos
+   - Reforzar políticas de contraseñas y bloqueo de cuentas
+   - Implementar monitoreo avanzado de eventos Kerberos
+
+### Scripts de respuesta automatizada
+
+```powershell
+# Script de respuesta para Kerberos Brute Force
+function Respond-KerberosBruteForce {
+    param($AttackerIPs, $TargetedAccounts, $AffectedDCs)
+    
+    # Bloquear IPs atacantes en firewall
+    foreach ($ip in $AttackerIPs) {
+        New-NetFirewallRule -DisplayName "Block Kerberos BF $ip" -Direction Inbound -RemoteAddress $ip -Protocol TCP -LocalPort 88 -Action Block
+        New-NetFirewallRule -DisplayName "Block Kerberos BF $ip UDP" -Direction Inbound -RemoteAddress $ip -Protocol UDP -LocalPort 88 -Action Block
+        Write-EventLog -LogName Security -Source "KerberosBFResponse" -EventId 9008 -Message "Blocked IP $ip due to Kerberos brute force attack"
+    }
+    
+    # Evaluar cuentas comprometidas potencialmente
+    foreach ($account in $TargetedAccounts) {
+        # Verificar si hubo autenticación exitosa tras fallos
+        $successAfterFails = Get-WinEvent -FilterHashtable @{
+            LogName='Security'
+            ID=4768
+            StartTime=(Get-Date).AddHours(-1)
+        } | Where-Object {
+            $_.Message -match "Account Name:\s+$account" -and 
+            $_.Message -notmatch "Result Code:\s+0x"
+        }
+        
+        if ($successAfterFails) {
+            # Cambiar contraseña inmediatamente
+            $newPassword = -join ((33..126) | Get-Random -Count 32 | % {[char]$_})
+            Set-ADAccountPassword -Identity $account -NewPassword (ConvertTo-SecureString $newPassword -AsPlainText -Force) -Reset
+            Write-EventLog -LogName Security -Source "KerberosBFResponse" -EventId 9009 -Message "Password reset for account $account after successful authentication during brute force"
+            
+            # Revocar sesiones activas
+            Get-ADUser -Identity $account | Set-ADUser -Replace @{userAccountControl=([int](Get-ADUser -Identity $account -Properties userAccountControl).userAccountControl -bor 0x0002)}
+            Start-Sleep -Seconds 5
+            Get-ADUser -Identity $account | Set-ADUser -Replace @{userAccountControl=([int](Get-ADUser -Identity $account -Properties userAccountControl).userAccountControl -band -bnot 0x0002)}
+        }
+    }
+    
+    # Configurar monitoreo intensivo temporal
+    $monitorScript = @"
+# Monitor temporal para ataques Kerberos continuos
+Register-WmiEvent -Query "SELECT * FROM Win32_NTLogEvent WHERE LogFile='Security' AND EventCode IN (4768,4771)" -Action {
+    `$Event = `$Event.SourceEventArgs.NewEvent
+    if (`$Event.Message -match "Client Address:\s+(\S+)") {
+        `$clientIP = `$matches[1]
+        if ('$($AttackerIPs -join "','" -replace "'","'''")' -contains `$clientIP) {
+            Write-EventLog -LogName Application -Source "KerberosBFMonitor" -EventId 2002 -Message "Continued Kerberos attack attempt from blocked IP `$clientIP"
+        }
+    }
+}
+"@
+    
+    # Notificar al equipo de seguridad
+    Send-MailMessage -To "security-team@company.com" -Subject "ALERT: Kerberos Brute Force Attack Detected" -Body "Kerberos brute force from IPs: $($AttackerIPs -join ', ') targeting accounts: $($TargetedAccounts -join ', '). IPs blocked and monitoring enabled."
+}
+
+# Script para fortalecer políticas anti-brute force
+function Implement-AntiBruteForceDefenses {
+    # Configurar políticas de bloqueo robustas
+    Set-ADDefaultDomainPasswordPolicy -LockoutDuration "01:00:00" -LockoutObservationWindow "00:15:00" -LockoutThreshold 3
+    
+    # Implementar políticas de contraseñas fuertes
+    Set-ADDefaultDomainPasswordPolicy -MinPasswordLength 14 -ComplexityEnabled $true -PasswordHistoryCount 24
+    
+    # Configurar auditoría extendida
+    auditpol /set /subcategory:"Kerberos Authentication Service" /success:enable /failure:enable
+    auditpol /set /subcategory:"Account Lockout" /success:enable /failure:enable
+    
+    # Crear script de monitoreo automático
+    $scheduledScript = @"
+# Script de monitoreo programado cada 5 minutos
+`$events = Get-WinEvent -FilterHashtable @{LogName='Security'; ID=4771; StartTime=(Get-Date).AddMinutes(-5)} -ErrorAction SilentlyContinue
+`$grouped = `$events | Group-Object {(`$_.Message | Select-String -Pattern 'Client Address:\s+(\S+)').Matches[0].Groups[1].Value}
+`$attacks = `$grouped | Where-Object Count -gt 10
+if (`$attacks) {
+    foreach (`$attack in `$attacks) {
+        Write-EventLog -LogName Application -Source "AutoKerbBFDetector" -EventId 3001 -Message "Potential Kerberos brute force: `$(`$attack.Count) attempts from `$(`$attack.Name) in last 5 minutes"
+        # Opcional: bloqueo automático
+        # New-NetFirewallRule -DisplayName "Auto-block `$(`$attack.Name)" -Direction Inbound -RemoteAddress `$attack.Name -Action Block
+    }
+}
+"@
+    
+    # Programar task de monitoreo
+    $action = New-ScheduledTaskAction -Execute "PowerShell.exe" -Argument "-WindowStyle Hidden -Command `"$scheduledScript`""
+    $trigger = New-ScheduledTaskTrigger -RepetitionInterval (New-TimeSpan -Minutes 5) -At (Get-Date) -RepetitionDuration (New-TimeSpan -Days 365)
+    Register-ScheduledTask -TaskName "KerberosBruteForceMonitor" -Action $action -Trigger $trigger -RunLevel Highest
+    
+    Write-Host "Anti-brute force defenses implemented successfully" -ForegroundColor Green
+}
+```
+
+### Checklist de respuesta a incidentes
+
+- [ ] **Detección confirmada**: Validar eventos 4768/4771 masivos indicando brute force
+- [ ] **Contención**: Bloquear IPs atacantes en firewall y sistemas de seguridad
+- [ ] **Evaluación**: Identificar cuentas objetivo y verificar autenticaciones exitosas
+- [ ] **Protección**: Cambiar contraseñas de cuentas potencialmente comprometidas
+- [ ] **Monitoreo**: Implementar vigilancia intensiva de eventos Kerberos
+- [ ] **Endurecimiento**: Reforzar políticas de bloqueo y contraseñas
+- [ ] **Documentación**: Registrar IPs atacantes y patrones identificados
+- [ ] **Seguimiento**: Monitorear durante 48 horas actividad relacionada
+
+### Patrones de detección avanzada
+
+```powershell
+# Script para detectar patrones sofisticados de brute force
+function Detect-AdvancedKerberosBruteForce {
+    $timeWindow = (Get-Date).AddHours(-1)
+    
+    # 1. Detectar ataques distribuidos (múltiples IPs, mismas cuentas)
+    $distributedAttacks = Get-WinEvent -FilterHashtable @{LogName='Security'; ID=4771; StartTime=$timeWindow} |
+    ForEach-Object {
+        $message = $_.Message
+        $ip = if ($message -match 'Client Address:\s+(\S+)') { $matches[1] } else { 'Unknown' }
+        $account = if ($message -match 'Account Name:\s+(\S+)') { $matches[1] } else { 'Unknown' }
+        [PSCustomObject]@{IP=$ip; Account=$account; Time=$_.TimeCreated}
+    } | Group-Object Account | Where-Object {
+        ($_.Group | Group-Object IP).Count -gt 3 -and $_.Count -gt 20
+    }
+    
+    # 2. Detectar spray lento (evadiendo umbrales temporales)
+    $slowSpray = Get-WinEvent -FilterHashtable @{LogName='Security'; ID=4771; StartTime=$timeWindow} |
+    ForEach-Object {
+        $message = $_.Message
+        $ip = if ($message -match 'Client Address:\s+(\S+)') { $matches[1] } else { 'Unknown' }
+        $account = if ($message -match 'Account Name:\s+(\S+)') { $matches[1] } else { 'Unknown' }
+        [PSCustomObject]@{IP=$ip; Account=$account; Time=$_.TimeCreated}
+    } | Group-Object IP | Where-Object {
+        ($_.Group | Group-Object Account).Count -gt 10 -and 
+        ($_.Group | Group-Object {$_.Time.ToString("yyyy-MM-dd HH:mm")} | Measure-Object).Count -gt 30
+    }
+    
+    # 3. Detectar técnicas de validación de usuarios
+    $userEnum = Get-WinEvent -FilterHashtable @{LogName='Security'; ID=4768; StartTime=$timeWindow} |
+    Where-Object { $_.Message -notmatch 'Result Code:' } |
+    ForEach-Object {
+        $message = $_.Message
+        $ip = if ($message -match 'Client Address:\s+(\S+)') { $matches[1] } else { 'Unknown' }
+        $account = if ($message -match 'Account Name:\s+(\S+)') { $matches[1] } else { 'Unknown' }
+        [PSCustomObject]@{IP=$ip; Account=$account; Type='ValidUser'}
+    } | Group-Object IP | Where-Object { $_.Count -gt 50 }
+    
+    # Reportar hallazgos
+    if ($distributedAttacks) {
+        Write-Warning "Distributed brute force detected against accounts: $($distributedAttacks.Name -join ', ')"
+    }
+    if ($slowSpray) {
+        Write-Warning "Slow password spray detected from IPs: $($slowSpray.Name -join ', ')"
+    }
+    if ($userEnum) {
+        Write-Warning "User enumeration detected from IPs: $($userEnum.Name -join ', ')"
+    }
+    
+    return @{
+        DistributedAttacks = $distributedAttacks
+        SlowSpray = $slowSpray
+        UserEnumeration = $userEnum
+    }
+}
+```
+
+---
+
 ## 📚 Referencias
 
 - [Kerberos Password Spray Detection - SigmaHQ](https://github.com/SigmaHQ/sigma/blob/master/rules/windows/builtin/security/win_kerberos_password_spray.yml)

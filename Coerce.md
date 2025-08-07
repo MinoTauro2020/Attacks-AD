@@ -453,6 +453,284 @@ Select-Object Name, Count | Sort-Object Count -Descending
 
 ---
 
+## 🚨 Respuesta ante incidentes
+
+### Procedimientos de respuesta crítica inmediata
+
+1. **Identificación del ataque de coerción:**
+   - Detectar eventos 5145 con acceso a pipes vulnerables (efsrpc, spoolss, netdfs, vss)
+   - Correlacionar con eventos 4624 NTLM inmediatamente posteriores
+   - Identificar herramientas de coerción (Coercer, PetitPotam, PrinterBug) en endpoints
+
+2. **Contención inmediata:**
+   - Bloquear IPs atacantes en firewalls y sistemas de perímetro
+   - Deshabilitar inmediatamente servicios vulnerables no esenciales (EFS, Spooler)
+   - Aislar sistemas que fueron forzados a autenticarse
+
+3. **Análisis de relay y escalada:**
+   - Verificar si las autenticaciones coercitivas fueron relayed a otros sistemas
+   - Identificar cuentas de máquina comprometidas y su nivel de privilegios
+   - Evaluar acceso obtenido mediante el relay attack
+
+4. **Investigación forense:**
+   - Analizar logs de red para identificar el relay destination
+   - Buscar evidencia de herramientas de coerción en sistemas atacantes
+   - Revisar cambios de configuración post-relay (nuevos usuarios, permisos, etc.)
+
+5. **Remediación y endurecimiento:**
+   - Aplicar parches críticos (KB5005413, KB5004946) si no están instalados
+   - Configurar LDAP Channel Binding y EPA (Extended Protection for Authentication)
+   - Implementar SMB Signing obligatorio en todos los sistemas críticos
+
+### Scripts de respuesta automatizada
+
+```powershell
+# Script de respuesta para ataques de coerción
+function Respond-CoercionAttack {
+    param($AttackerIPs, $VulnerableServices, $CompromisedSystems)
+    
+    Write-Host "🚨 INICIANDO RESPUESTA A ATAQUE DE COERCIÓN 🚨" -ForegroundColor Red
+    
+    # 1. Bloquear IPs atacantes inmediatamente
+    foreach ($ip in $AttackerIPs) {
+        New-NetFirewallRule -DisplayName "Block Coercion Attack $ip" -Direction Inbound -RemoteAddress $ip -Action Block
+        New-NetFirewallRule -DisplayName "Block Coercion Attack $ip SMB" -Direction Inbound -RemoteAddress $ip -Protocol TCP -LocalPort 445 -Action Block
+        New-NetFirewallRule -DisplayName "Block Coercion Attack $ip RPC" -Direction Inbound -RemoteAddress $ip -Protocol TCP -LocalPort 135 -Action Block
+        Write-EventLog -LogName Security -Source "CoercionResponse" -EventId 9010 -Message "Blocked IP $ip due to coercion attack"
+    }
+    
+    # 2. Deshabilitar servicios vulnerables inmediatamente
+    $servicesToDisable = @("EFS", "Spooler", "VSS", "DFSNM")
+    foreach ($service in $servicesToDisable) {
+        try {
+            if ($VulnerableServices -contains $service) {
+                Stop-Service -Name $service -Force -ErrorAction SilentlyContinue
+                Set-Service -Name $service -StartupType Disabled
+                Write-EventLog -LogName Security -Source "CoercionResponse" -EventId 9011 -Message "Disabled vulnerable service $service after coercion attack"
+            }
+        } catch {
+            Write-Warning "Could not disable service $service"
+        }
+    }
+    
+    # 3. Rotar contraseñas de cuentas de máquina comprometidas
+    foreach ($system in $CompromisedSystems) {
+        try {
+            Invoke-Command -ComputerName $system -ScriptBlock {
+                # Forzar rotación de contraseña de cuenta de máquina
+                nltest /sc_change_pwd:$env:USERDOMAIN
+                # Limpiar cache Kerberos
+                klist purge
+                # Reiniciar servicio Netlogon
+                Restart-Service Netlogon -Force
+            } -ErrorAction Continue
+            
+            Write-EventLog -LogName Security -Source "CoercionResponse" -EventId 9012 -Message "Rotated machine account password for $system after coercion"
+        } catch {
+            Write-Warning "Could not rotate machine account for $system"
+        }
+    }
+    
+    # 4. Implementar mitigaciones críticas
+    # Configurar LDAP Channel Binding
+    Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\NTDS\Parameters" -Name "LdapEnforceChannelBinding" -Value 2
+    
+    # Habilitar EPA (Extended Protection for Authentication)
+    Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\LSA" -Name "SuppressExtendedProtection" -Value 0
+    
+    # Configurar SMB Signing obligatorio
+    Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\LanManServer\Parameters" -Name "RequireSecuritySignature" -Value 1
+    
+    # 5. Notificación crítica
+    $criticalMessage = @"
+🚨 ATAQUE DE COERCIÓN DETECTADO Y CONTENIDO 🚨
+
+IPs atacantes bloqueadas: $($AttackerIPs -join ', ')
+Servicios vulnerables deshabilitados: $($servicesToDisable -join ', ')
+Sistemas comprometidos remediados: $($CompromisedSystems -join ', ')
+
+MITIGACIONES APLICADAS:
+- LDAP Channel Binding habilitado
+- Extended Protection for Authentication configurado
+- SMB Signing obligatorio implementado
+
+ACCIONES PENDIENTES:
+- Revisar logs de relay attacks
+- Verificar integridad de sistemas afectados
+- Aplicar parches faltantes si los hay
+"@
+    
+    Send-MailMessage -To "security-team@company.com" -Subject "🚨 CRITICAL: Coercion Attack Contained" -Body $criticalMessage
+    
+    Write-Host "✅ RESPUESTA A COERCIÓN COMPLETADA" -ForegroundColor Green
+}
+
+# Script para detectar y remediar vulnerabilidades de coerción
+function Audit-CoercionVulnerabilities {
+    Write-Host "=== AUDITORÍA DE VULNERABILIDADES DE COERCIÓN ===" -ForegroundColor Yellow
+    
+    # 1. Verificar servicios vulnerables activos
+    $vulnerableServices = @("EFS", "Spooler", "VSS", "DFSNM", "FSRVP")
+    $activeVulnerable = @()
+    
+    foreach ($service in $vulnerableServices) {
+        $svc = Get-Service -Name $service -ErrorAction SilentlyContinue
+        if ($svc -and $svc.Status -eq "Running") {
+            $activeVulnerable += $service
+            Write-Host "⚠️ Servicio vulnerable activo: $service" -ForegroundColor Red
+        }
+    }
+    
+    # 2. Verificar configuraciones de mitigación
+    $ldapBinding = Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\NTDS\Parameters" -Name "LdapEnforceChannelBinding" -ErrorAction SilentlyContinue
+    if ($ldapBinding.LdapEnforceChannelBinding -ne 2) {
+        Write-Host "⚠️ LDAP Channel Binding NO configurado correctamente" -ForegroundColor Red
+    } else {
+        Write-Host "✓ LDAP Channel Binding configurado" -ForegroundColor Green
+    }
+    
+    $epa = Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\LSA" -Name "SuppressExtendedProtection" -ErrorAction SilentlyContinue
+    if ($epa.SuppressExtendedProtection -ne 0) {
+        Write-Host "⚠️ Extended Protection for Authentication NO habilitado" -ForegroundColor Red
+    } else {
+        Write-Host "✓ Extended Protection for Authentication habilitado" -ForegroundColor Green
+    }
+    
+    # 3. Verificar parches críticos
+    $criticalPatches = @("KB5005413", "KB5004946", "KB5008212")
+    foreach ($patch in $criticalPatches) {
+        $installed = Get-HotFix -Id $patch -ErrorAction SilentlyContinue
+        if (-not $installed) {
+            Write-Host "⚠️ Parche crítico faltante: $patch" -ForegroundColor Red
+        } else {
+            Write-Host "✓ Parche instalado: $patch" -ForegroundColor Green
+        }
+    }
+    
+    # 4. Buscar evidencia de ataques previos
+    $coercionEvents = Get-WinEvent -FilterHashtable @{
+        LogName='Security'
+        ID=5145
+        StartTime=(Get-Date).AddDays(-7)
+    } -ErrorAction SilentlyContinue | Where-Object {
+        $_.Message -match "\\\\pipe\\\\(efsrpc|spoolss|netdfs|vss|lsarpc)"
+    }
+    
+    if ($coercionEvents) {
+        Write-Host "⚠️ Encontrados $($coercionEvents.Count) accesos sospechosos a pipes en los últimos 7 días" -ForegroundColor Yellow
+        $coercionEvents | Select-Object TimeCreated, Id, @{Name='PipeName';Expression={
+            if ($_.Message -match "Object Name:\s+(.+)") { $matches[1] } else { "Unknown" }
+        }} | Format-Table -AutoSize
+    }
+    
+    return @{
+        ActiveVulnerableServices = $activeVulnerable
+        LdapChannelBinding = ($ldapBinding.LdapEnforceChannelBinding -eq 2)
+        ExtendedProtection = ($epa.SuppressExtendedProtection -eq 0)
+        RecentCoercionAttempts = $coercionEvents.Count
+    }
+}
+```
+
+### Checklist de respuesta a incidentes
+
+- [ ] **Detección confirmada**: Validar eventos 5145 + 4624 indicando coerción exitosa
+- [ ] **Contención**: Bloquear IPs atacantes y aislar sistemas comprometidos
+- [ ] **Mitigación**: Deshabilitar servicios vulnerables no esenciales inmediatamente
+- [ ] **Remediación**: Rotar contraseñas de cuentas de máquina afectadas
+- [ ] **Endurecimiento**: Configurar LDAP Channel Binding y EPA
+- [ ] **Análisis**: Investigar alcance del relay attack y sistemas comprometidos
+- [ ] **Parches**: Aplicar actualizaciones críticas de seguridad faltantes
+- [ ] **Monitoreo**: Implementar detección mejorada de futuros ataques
+- [ ] **Documentación**: Registrar IoCs y actualizar playbooks
+
+### Indicadores críticos de coerción
+
+```
+Eventos definitivos:
+- 5145 con ObjectName = \\pipe\\efsrpc|spoolss|netdfs|vss
+- 4624 LogonType=3 AuthenticationPackage=NTLM inmediatamente después
+- Múltiples conexiones RPC desde misma IP a diferentes sistemas
+- Herramientas detectadas: coercer.py, petitpotam.py, printerbug.py
+
+Evidencia forense:
+- Archivos de herramientas de coerción en sistemas atacantes
+- Conexiones de red anómalas en puertos 445, 135
+- Cambios de configuración post-relay (nuevos objetos AD, permisos)
+- Autenticaciones de cuentas de máquina desde IPs externas
+
+Red flags críticos:
+- Domain Controllers autenticándose contra sistemas no confiables
+- Acceso a pipes administrativos desde workstations
+- Patrones de relay coordinados (múltiples objetivos)
+- Escalada de privilegios inmediatamente post-coerción
+```
+
+### Scripts de hardening post-incidente
+
+```powershell
+# Script completo de hardening contra coerción
+function Implement-CoercionHardening {
+    Write-Host "🛡️ IMPLEMENTANDO HARDENING CONTRA COERCIÓN" -ForegroundColor Cyan
+    
+    # 1. Deshabilitar servicios RPC vulnerables
+    $servicesToDisable = @(
+        @{Name="EFS"; DisplayName="Encrypting File System"},
+        @{Name="Spooler"; DisplayName="Print Spooler"},
+        @{Name="DFSNM"; DisplayName="DFS Namespace"}
+    )
+    
+    foreach ($service in $servicesToDisable) {
+        try {
+            $svc = Get-Service -Name $service.Name -ErrorAction SilentlyContinue
+            if ($svc -and $svc.Status -eq "Running") {
+                Stop-Service -Name $service.Name -Force
+                Set-Service -Name $service.Name -StartupType Disabled
+                Write-Host "✓ Deshabilitado: $($service.DisplayName)" -ForegroundColor Green
+            }
+        } catch {
+            Write-Warning "No se pudo deshabilitar: $($service.DisplayName)"
+        }
+    }
+    
+    # 2. Configurar LDAP Channel Binding (crítico)
+    Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\NTDS\Parameters" -Name "LdapEnforceChannelBinding" -Value 2
+    Write-Host "✓ LDAP Channel Binding configurado" -ForegroundColor Green
+    
+    # 3. Habilitar Extended Protection for Authentication
+    Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\LSA" -Name "SuppressExtendedProtection" -Value 0
+    Write-Host "✓ Extended Protection for Authentication habilitado" -ForegroundColor Green
+    
+    # 4. Forzar SMB Signing
+    Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\LanManServer\Parameters" -Name "RequireSecuritySignature" -Value 1
+    Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters" -Name "RequireSecuritySignature" -Value 1
+    Write-Host "✓ SMB Signing obligatorio configurado" -ForegroundColor Green
+    
+    # 5. Configurar autenticación RPC segura
+    Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Rpc\ClientProtocols" -Name "AuthnLevel" -Value 6
+    Write-Host "✓ Nivel de autenticación RPC elevado" -ForegroundColor Green
+    
+    # 6. Deshabilitar protocolos legacy de name resolution
+    # LLMNR
+    if (-not (Test-Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient")) {
+        New-Item -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient" -Force
+    }
+    Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient" -Name "EnableMulticast" -Value 0
+    
+    # NetBIOS
+    $adapters = Get-WmiObject -Class Win32_NetworkAdapterConfiguration | Where-Object {$_.IPEnabled -eq $true}
+    foreach ($adapter in $adapters) {
+        $adapter.SetTcpipNetbios(2) # Disable NetBIOS
+    }
+    Write-Host "✓ Protocolos legacy de name resolution deshabilitados" -ForegroundColor Green
+    
+    Write-Host "🛡️ HARDENING CONTRA COERCIÓN COMPLETADO" -ForegroundColor Green
+    Write-Host "⚠️ REINICIO REQUERIDO para aplicar todos los cambios" -ForegroundColor Yellow
+}
+```
+
+---
+
 ## 📚 Referencias
 
 - [PetitPotam - HackTricks](https://book.hacktricks.xyz/windows-hardening/active-directory-methodology/petitpotam)
