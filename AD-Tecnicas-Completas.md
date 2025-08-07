@@ -27,11 +27,11 @@ Este documento recopila todas las técnicas de pentesting en Active Directory or
 
 | Técnica | Herramientas | Estado en Repo |
 |---------|-------------|----------------|
-| **Enumeración SMB** | enum4linux, smbclient, smbmap, crackmapexec | ❌ |
+| **Enumeración SMB** | enum4linux, smbclient, smbmap, crackmapexec | ✅ (Enum-SMB.md) |
 | **Enumeración LDAP** | ldapsearch, ldapdomaindump, windapsearch | ✅ (BruteForce-Ldap.md) |
 | **Enumeración RPC** | rpcclient, rpcinfo | ✅ (Enum-Rpcclient.md) |
-| **Enumeración DNS** | dnsrecon, dnsenum, dig | ❌ |
-| **Enumeración NTP** | ntpq, ntpdate | ❌ |
+| **Enumeración DNS** | dnsrecon, dnsenum, dig | ✅ (Enum-DNS.md) |
+| **Enumeración NTP** | ntpq, ntpdate | ✅ (Enum-NTP.md) |
 | **Anonymous Logon** | rpcclient, smbclient | ✅ (Anonymous-Logon-Guest.md) |
 
 ### 1.2 Enumeración de Usuarios
@@ -40,7 +40,7 @@ Este documento recopila todas las técnicas de pentesting en Active Directory or
 |---------|-------------|----------------|
 | **User Enumeration via SMB** | enum4linux, crackmapexec | ✅ (EnumUsers.md) |
 | **User Enumeration via LDAP** | ldapsearch, windapsearch | ✅ (EnumUsers.md) |
-| **User Enumeration via Kerberos** | kerbrute, nmap | ❌ |
+| **User Enumeration via Kerberos** | kerbrute, nmap | ✅ (BruteForce-Kerberos.md) |
 | **ASREPRoast User Discovery** | GetNPUsers.py, Rubeus | ✅ (As-Rep-Roasting.md) |
 | **SPN User Discovery** | GetUserSPNs.py, Rubeus | ✅ (Kerberoasting.md) |
 
@@ -191,8 +191,8 @@ Este documento recopila todas las técnicas de pentesting en Active Directory or
 
 | Técnica | Herramientas | Estado en Repo |
 |---------|-------------|----------------|
-| **Golden Ticket Persistence** | mimikatz, ticketer.py | ❌ |
-| **Silver Ticket Persistence** | mimikatz, ticketer.py | ❌ |
+| **Golden Ticket Persistence** | mimikatz, ticketer.py | ✅ (Golden-Ticket.md) |
+| **Silver Ticket Persistence** | mimikatz, ticketer.py | ✅ (Silver-Ticket.md) |
 | **Skeleton Key** | mimikatz | ❌ |
 | **DCShadow** | mimikatz | ❌ |
 | **SID History Injection** | mimikatz, SIDHistory | ❌ |
@@ -222,7 +222,7 @@ Este documento recopila todas las técnicas de pentesting en Active Directory or
 | Técnica | Herramientas | Estado en Repo |
 |---------|-------------|----------------|
 | **Pass-the-Hash** | mimikatz, crackmapexec | ✅ (PassTheHash.md) |
-| **Pass-the-Ticket** | mimikatz, getTGT.py | ❌ |
+| **Pass-the-Ticket** | mimikatz, getTGT.py | ✅ (Impersonation-Attacks.md, Golden-Ticket.md, Silver-Ticket.md) |
 | **Pass-the-Key** | Rubeus, mimikatz | ✅ (Impersonation-Attacks.md) |
 | **Overpass-the-Hash** | Rubeus, mimikatz | ✅ (Impersonation-Attacks.md) |
 
@@ -314,7 +314,7 @@ Este documento recopila todas las técnicas de pentesting en Active Directory or
 
 | Técnica | Herramientas | Estado en Repo |
 |---------|-------------|----------------|
-| **NTDS.dit Extraction** | secretsdump.py, vssadmin | ❌ |
+| **NTDS.dit Extraction** | secretsdump.py, vssadmin | ✅ (NTDS-dit-Extraction.md) |
 | **LSA Secrets** | secretsdump.py, mimikatz | ❌ |
 | **Cached Credentials** | secretsdump.py, mimikatz | ❌ |
 | **DPAPI Secrets** | mimikatz, SharpDPAPI | ❌ |
@@ -341,10 +341,11 @@ Este documento recopila todas las técnicas de pentesting en Active Directory or
 
 ## 📊 Estado Actual del Repositorio
 
-### ✅ Técnicas ya Documentadas (37)
+### ✅ Técnicas ya Documentadas (45)
 - AS-REP Roasting
 - Kerberoasting  
 - Pass-the-Hash
+- Pass-the-Ticket
 - SMB Relay Attacks
 - RBCD (Resource-Based Constrained Delegation)
 - BloodHound Usage
@@ -352,7 +353,8 @@ Este documento recopila todas las técnicas de pentesting en Active Directory or
 - noPac (CVE-2021-42278/42287)
 - ZeroLogon (CVE-2020-1472)
 - MS14-068 (CVE-2014-6324)
-- Enumeration via RPC, LDAP, Users
+- Enumeration via RPC, LDAP, Users, SMB, DNS, NTP
+- User Enumeration via Kerberos
 - Anonymous Logon techniques
 - Lateral Movement with NetExec
 - Coercion attacks (PrinterBug, PetitPotam, DFSCoerce)
@@ -361,13 +363,13 @@ Este documento recopila todas las técnicas de pentesting en Active Directory or
 - Unconstrained Delegation
 - Constrained Delegation
 - S4U2Self/S4U2Proxy Abuse
-- Golden Ticket Attacks
-- Silver Ticket Attacks
+- Golden Ticket Attacks & Persistence
+- Silver Ticket Attacks & Persistence
 - DCSync Attack
 - NTDS.dit Extraction
-- Password Spraying (NEW)
+- Password Spraying
 
-### ❌ Técnicas Pendientes de Documentar (>85)
+### ❌ Técnicas Pendientes de Documentar (>77)
 
 #### 🔴 Prioridad Alta (Técnicas Fundamentales):
 1. **Golden/Silver Ticket Attacks**
@@ -406,5 +408,6 @@ Este documento recopila todas las técnicas de pentesting en Active Directory or
 
 **Documento creado:** Julio 2024  
 **Técnicas identificadas:** ~150+ técnicas de AD pentesting  
-**Estado actual:** 37 documentadas, >85 pendientes  
+**Estado actual:** 45 documentadas, >77 pendientes  
+**Última actualización:** Agosto 2024  
 **Fuentes:** Recopilación de recursos estándar de AD pentesting  
