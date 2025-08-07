@@ -559,6 +559,183 @@ Write-Host "- Configurar alertas SIEM para detección automática" -ForegroundCo
 
 ---
 
+## 🚨 Respuesta ante incidentes
+
+### Procedimientos de respuesta crítica inmediata
+
+1. **Confirmación de Golden Ticket:**
+   - Verificar eventos 4768 con solicitudes TGT para usuarios inexistentes o inactivos
+   - Analizar tickets con duración anómala o sin validaciones normales de dominio
+   - Correlacionar con actividad de extracción previa de credenciales (DCSync, NTDS.dit)
+
+2. **Contención de emergencia (CRÍTICA):**
+   - **Rotar inmediatamente la cuenta krbtgt (doble rotación)** - Esta es la ÚNICA forma de invalidar Golden Tickets
+   - Aislar redes y sistemas donde se detectó uso de Golden Tickets
+   - Bloquear cuentas administrativas sospechosas y cambiar todas las contraseñas de cuentas privilegiadas
+   - Implementar segmentación de red de emergencia
+
+3. **Análisis de compromiso total:**
+   - Asumir compromiso completo del dominio hasta demostrar lo contrario
+   - Identificar el método de obtención del hash krbtgt (DCSync, NTDS.dit, LSA Secrets)
+   - Determinar el alcance temporal del compromiso basado en fecha de última rotación krbtgt
+   - Catalogar todos los sistemas y datos accedidos con Golden Tickets
+
+4. **Investigación forense especializada:**
+   - Buscar herramientas de Golden Ticket (mimikatz, ticketer.py, Rubeus)
+   - Analizar logs de Domain Controllers para actividad anómala de replicación
+   - Revisar backups de NTDS.dit por accesos no autorizados
+   - Verificar integridad de controladores de dominio
+
+5. **Reconstrucción y recuperación:**
+   - Realizar doble rotación de krbtgt (esperar replicación entre rotaciones)
+   - Reconstruir políticas de seguridad desde baseline conocido
+   - Implementar monitoreo avanzado de eventos 4768/4769
+   - Establecer programa de rotación regular de krbtgt (cada 40 días)
+
+### Scripts de respuesta de emergencia
+
+```powershell
+# Script de respuesta CRÍTICA para Golden Ticket
+function Respond-GoldenTicketEmergency {
+    param($SuspiciousAccounts, $AffectedSystems)
+    
+    Write-Host "🚨 INICIANDO RESPUESTA DE EMERGENCIA GOLDEN TICKET 🚨" -ForegroundColor Red
+    
+    # 1. ROTACIÓN INMEDIATA DE KRBTGT (CRÍTICO)
+    Write-Host "1. Rotando cuenta krbtgt (Primera rotación)..." -ForegroundColor Yellow
+    $krbtgtUser = Get-ADUser -Identity krbtgt
+    $newPassword1 = -join ((33..126) | Get-Random -Count 64 | % {[char]$_})
+    Set-ADAccountPassword -Identity $krbtgtUser -NewPassword (ConvertTo-SecureString $newPassword1 -AsPlainText -Force) -Reset
+    Write-EventLog -LogName Security -Source "GoldenTicketResponse" -EventId 9005 -Message "EMERGENCY: First krbtgt rotation completed due to Golden Ticket attack"
+    
+    # Esperar replicación de AD
+    Write-Host "Esperando replicación de AD (10 horas)..." -ForegroundColor Yellow
+    Write-Host "⚠️ CONTINUAR CON SEGUNDA ROTACIÓN EN 10+ HORAS ⚠️" -ForegroundColor Red
+    
+    # 2. Bloquear cuentas sospechosas inmediatamente
+    foreach ($account in $SuspiciousAccounts) {
+        Disable-ADAccount -Identity $account
+        Write-EventLog -LogName Security -Source "GoldenTicketResponse" -EventId 9006 -Message "Account $account disabled due to Golden Ticket activity"
+    }
+    
+    # 3. Revocar todas las sesiones Kerberos activas
+    foreach ($system in $AffectedSystems) {
+        Invoke-Command -ComputerName $system -ScriptBlock {
+            klist purge_li
+            klist purge
+            # Reiniciar servicio Kerberos
+            Restart-Service kdc -Force
+        } -ErrorAction SilentlyContinue
+    }
+    
+    # 4. Implementar monitoreo de emergencia
+    $emergencyMonitorScript = @"
+# Monitor emergencia para Golden Tickets
+Register-WmiEvent -Query "SELECT * FROM Win32_NTLogEvent WHERE LogFile='Security' AND EventCode=4768" -Action {
+    `$Event = `$Event.SourceEventArgs.NewEvent
+    if (`$Event.Message -match "Service Name:\s+krbtgt") {
+        `$timestamp = Get-Date
+        `$message = "EMERGENCY GOLDEN TICKET MONITOR: krbtgt TGT request at `$timestamp"
+        Write-EventLog -LogName Application -Source "EmergencyGTMonitor" -EventId 2001 -Message `$message
+        Send-MailMessage -To "security-emergency@company.com" -Subject "CRITICAL: Golden Ticket Activity" -Body `$message
+    }
+}
+"@
+    
+    # 5. Notificación crítica a CISO/management
+    $criticalMessage = @"
+🚨 INCIDENTE CRÍTICO: GOLDEN TICKET DETECTADO 🚨
+
+Compromiso confirmado del dominio de Active Directory.
+Cuenta krbtgt rotada (primera rotación completada).
+Sistemas afectados: $($AffectedSystems -join ', ')
+Cuentas sospechosas: $($SuspiciousAccounts -join ', ')
+
+ACCIONES REQUERIDAS:
+- Segunda rotación de krbtgt en 10+ horas
+- Revisión completa de seguridad del dominio
+- Posible reconstrucción completa de AD
+
+ESTADO: DOMINIO COMPROMETIDO - NIVEL CRÍTICO
+"@
+    
+    Send-MailMessage -To "ciso@company.com,security-team@company.com" -Subject "🚨 CRITICAL: Golden Ticket Domain Compromise" -Body $criticalMessage
+    
+    Write-Host "Respuesta de emergencia completada. CONTINUAR CON SEGUNDA ROTACIÓN KRBTGT." -ForegroundColor Red
+}
+
+# Script para segunda rotación de krbtgt (ejecutar después de 10+ horas)
+function Complete-KrbtgtDoubleRotation {
+    Write-Host "🔄 EJECUTANDO SEGUNDA ROTACIÓN KRBTGT..." -ForegroundColor Yellow
+    
+    $krbtgtUser = Get-ADUser -Identity krbtgt
+    $newPassword2 = -join ((33..126) | Get-Random -Count 64 | % {[char]$_})
+    Set-ADAccountPassword -Identity $krbtgtUser -NewPassword (ConvertTo-SecureString $newPassword2 -AsPlainText -Force) -Reset
+    Write-EventLog -LogName Security -Source "GoldenTicketResponse" -EventId 9007 -Message "EMERGENCY: Second krbtgt rotation completed - Golden Tickets now invalidated"
+    
+    Write-Host "✅ SEGUNDA ROTACIÓN COMPLETADA - GOLDEN TICKETS INVALIDADOS" -ForegroundColor Green
+    Write-Host "Todos los Golden Tickets existentes han sido invalidados permanentemente." -ForegroundColor Green
+    
+    # Verificar replicación
+    Write-Host "Verificando replicación en todos los DCs..." -ForegroundColor Yellow
+    $DCs = Get-ADDomainController -Filter *
+    foreach ($DC in $DCs) {
+        try {
+            $krbtgtCheck = Get-ADUser -Identity krbtgt -Server $DC.Name -Properties PasswordLastSet
+            Write-Host "DC $($DC.Name): krbtgt PasswordLastSet = $($krbtgtCheck.PasswordLastSet)" -ForegroundColor Cyan
+        } catch {
+            Write-Warning "No se pudo verificar DC $($DC.Name)"
+        }
+    }
+}
+```
+
+### Checklist de respuesta crítica
+
+- [ ] **🚨 CONFIRMACIÓN**: Golden Ticket confirmado via análisis de eventos 4768
+- [ ] **🔥 ROTACIÓN 1**: Primera rotación de krbtgt ejecutada inmediatamente
+- [ ] **⏱️ ESPERA**: Esperando 10+ horas para replicación completa de AD
+- [ ] **🔥 ROTACIÓN 2**: Segunda rotación de krbtgt completada (invalida todos los Golden Tickets)
+- [ ] **🔒 CONTENCIÓN**: Sistemas y cuentas sospechosas aisladas y deshabilitadas
+- [ ] **🔍 FORENSE**: Investigación del método de obtención del hash krbtgt
+- [ ] **📊 MONITOREO**: Monitoreo de emergencia implementado para eventos krbtgt
+- [ ] **📋 DOCUMENTACIÓN**: Cronología completa del incidente documentada
+- [ ] **🏗️ RECONSTRUCCIÓN**: Evaluación de necesidad de reconstrucción de dominio
+- [ ] **📈 SEGUIMIENTO**: Monitoreo intensivo por 90 días post-incidente
+
+### Indicadores críticos de Golden Ticket
+
+```
+Eventos definitivos:
+- 4768 con Service Name = krbtgt para usuarios inexistentes
+- TGT con duración anómala (años en lugar de horas)
+- Autenticación exitosa sin eventos 4624 correspondientes
+- Acceso a recursos críticos sin escalada previa de privilegios
+
+Artifacts forenses:
+- mimikatz.exe con comandos kerberos::golden
+- Archivos .kirbi o .ccache con tickets falsificados
+- ticketer.py o herramientas de Impacket
+- Evidencia de DCSync o extracción de NTDS.dit
+
+Red flags críticos:
+- Actividad administrativa sin trazabilidad
+- Accesos cross-domain sin trusts válidos
+- Persistencia que sobrevive cambios de contraseña
+- Tickets válidos por periodos extremadamente largos
+```
+
+### Matriz de decisión post-Golden Ticket
+
+| Escenario | Acción Recomendada | Nivel de Criticidad |
+|-----------|-------------------|-------------------|
+| **Golden Ticket < 24h** | Doble rotación krbtgt + investigación | CRÍTICO |
+| **Golden Ticket > 1 semana** | Reconstrucción completa del dominio | EXTREMO |
+| **Múltiples Golden Tickets** | Reconstrucción + análisis forense completo | EXTREMO |
+| **Ticket cross-forest** | Revisar todos los trusts + reconstrucción | EXTREMO |
+
+---
+
 ## 📚 Referencias
 
 - [Golden Ticket Attack - MITRE ATT&CK T1558.001](https://attack.mitre.org/techniques/T1558/001/)

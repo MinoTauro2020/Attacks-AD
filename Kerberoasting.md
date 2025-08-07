@@ -638,6 +638,93 @@ python3 /usr/share/doc/python3-impacket/examples/GetUserSPNs.py essos.local/usua
 
 ---
 
+## 🚨 Respuesta ante incidentes
+
+### Procedimientos de respuesta inmediata
+
+1. **Identificación del ataque Kerberoasting:**
+   - Correlacionar eventos 4769 con solicitudes masivas de TGS desde una IP/cuenta específica
+   - Identificar cuentas de servicio objetivo y evaluar su criticidad
+   - Verificar si las herramientas de Kerberoasting fueron detectadas en los endpoints
+
+2. **Contención inmediata:**
+   - Aislar la IP/sistema origen del ataque para prevenir escalada
+   - Cambiar inmediatamente las contraseñas de las cuentas de servicio comprometidas
+   - Deshabilitar temporalmente las cuentas objetivo si es posible sin afectar servicios críticos
+
+3. **Análisis de impacto:**
+   - Determinar qué cuentas de servicio fueron enumeradas o tuvieron tickets solicitados
+   - Evaluar los privilegios y accesos de las cuentas comprometidas
+   - Revisar logs de autenticación para identificar uso posterior de credenciales
+
+4. **Investigación forense:**
+   - Analizar la fuente del ataque y método de acceso inicial
+   - Buscar indicadores de movimiento lateral desde la cuenta comprometida
+   - Verificar si se realizó cracking offline exitoso de los hashes obtenidos
+
+5. **Recuperación y endurecimiento:**
+   - Implementar contraseñas más robustas en todas las cuentas de servicio
+   - Revisar y minimizar SPNs innecesarios
+   - Fortalecer monitoreo de eventos 4769 con umbrales más estrictos
+   - Aplicar principio de menor privilegio a cuentas de servicio
+
+### Scripts de respuesta automatizada
+
+```powershell
+# Script de respuesta para detección de Kerberoasting
+function Respond-KerberoastingAttack {
+    param($AttackerIP, $TargetServices, $CompromisedAccount)
+    
+    # Bloquear IP atacante
+    New-NetFirewallRule -DisplayName "Block Kerberoasting IP" -Direction Inbound -RemoteAddress $AttackerIP -Action Block
+    
+    # Rotar contraseñas de cuentas de servicio afectadas
+    foreach ($service in $TargetServices) {
+        $newPassword = -join ((33..126) | Get-Random -Count 32 | % {[char]$_})
+        Set-ADAccountPassword -Identity $service -NewPassword (ConvertTo-SecureString $newPassword -AsPlainText -Force) -Reset
+        Write-EventLog -LogName Security -Source "ADSecurity" -EventId 9002 -Message "Password reset for service account $service due to Kerberoasting attack"
+    }
+    
+    # Forzar actualización de políticas
+    gpupdate /force
+    
+    # Notificar al equipo de seguridad
+    Send-MailMessage -To "security-team@company.com" -Subject "ALERT: Kerberoasting Attack Detected" -Body "Kerberoasting attack from $AttackerIP targeting services: $($TargetServices -join ', '). Passwords have been reset."
+}
+
+# Script para auditar y fortalecer SPNs
+function Audit-ServicePrincipalNames {
+    $vulnerableAccounts = Get-ADUser -Filter {ServicePrincipalName -like "*"} -Properties ServicePrincipalName,PasswordLastSet,MemberOf
+    
+    foreach ($account in $vulnerableAccounts) {
+        $passwordAge = (Get-Date) - $account.PasswordLastSet
+        
+        if ($passwordAge.Days -gt 365) {
+            Write-Warning "Service account $($account.Name) has password older than 1 year: $($account.PasswordLastSet)"
+        }
+        
+        # Verificar si tiene privilegios excesivos
+        $privilegedGroups = $account.MemberOf | Where-Object {$_ -match "(Admin|Operator|Power)"}
+        if ($privilegedGroups) {
+            Write-Warning "Service account $($account.Name) has privileged group memberships: $($privilegedGroups -join ', ')"
+        }
+    }
+}
+```
+
+### Checklist de respuesta a incidentes
+
+- [ ] **Detección confirmada**: Validar que los eventos 4769 indican Kerberoasting real
+- [ ] **Contención**: Bloquear IP atacante y aislar sistemas comprometidos
+- [ ] **Evaluación**: Identificar servicios críticos afectados y su impacto en el negocio
+- [ ] **Rotación**: Cambiar contraseñas de todas las cuentas de servicio objetivo
+- [ ] **Monitoreo**: Intensificar vigilancia de autenticación con nuevas credenciales
+- [ ] **Fortalecimiento**: Implementar contraseñas más robustas y AES encryption
+- [ ] **Documentación**: Registrar lecciones aprendidas y actualizar procedimientos
+- [ ] **Seguimiento**: Monitorear durante 30 días actividad relacionada con las cuentas afectadas
+
+---
+
 ## 📚 Referencias
 
 - [Kerberoasting - HackTricks](https://book.hacktricks.xyz/windows-hardening/active-directory-methodology/kerberoasting)
